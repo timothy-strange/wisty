@@ -1,4 +1,4 @@
-import { createSignal } from "solid-js";
+import { createEffect, createSignal, onCleanup, onMount } from "solid-js";
 
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { save as saveDialog, open as openDialog, ask as askDialog, message } from "@tauri-apps/plugin-dialog"
@@ -26,31 +26,44 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener("change", eve
 })
 
 export default function Wisty() {
-  const [selectedSettingsTab, setSelectedSettingsTab] = createSignal("display");
   const [startingState, setStartingState] = createSignal("");
   const [textEdited, setTextEdited] = createSignal(false);
   const [currentFilePath, setCurrentFilePath] = createSignal("");
-  const [textWrapEnabled, setTextWrapEnabled] = createSignal(false);
+  const [textWrapEnabled, setTextWrapEnabled] = createSignal(true);
   const [textFontClass, setTextFontClass] = createSignal("font-sans");
+  const [fontSize, setFontSize] = createSignal(14);
+  const [fontSizeEditing, setFontSizeEditing] = createSignal(false);
+  const [fontSizeInput, setFontSizeInput] = createSignal("14");
+  const [fontBold, setFontBold] = createSignal(false);
+  const [fontItalic, setFontItalic] = createSignal(false);
+  const [fontUnderline, setFontUnderline] = createSignal(false);
+  const [statusBarVisible, setStatusBarVisible] = createSignal(true);
+  const [openMenu, setOpenMenu] = createSignal("");
+  const [aboutOpen, setAboutOpen] = createSignal(false);
+  const [fileName, setFileName] = createSignal("Untitled");
+  const [statsText, setStatsText] = createSignal("0 Words, 0 Chars");
 
-  const regularButton = "disabled:pointer-events-none disabled:opacity-50 rounded px-2 py-0.5 text-sm ring-1 duration-[50ms] hover:shadow select-none w-fit h-fit bg-gray-100 text-black ring-gray-200 hover:shadow-gray-200 active:bg-gray-200 dark:bg-gray-800 dark:text-white dark:ring-gray-700 dark:hover:shadow-gray-700 dark:active:bg-gray-700";
   const minimalButton = "disabled:pointer-events-none disabled:opacity-50 rounded px-2 py-0.5 text-sm ring-1 duration-[50ms] hover:shadow select-none w-fit h-fit bg-transparent text-black ring-transparent hover:ring-gray-200 hover:bg-gray-100 active:bg-gray-200 active:ring-gray-200 dark:text-white dark:hover:ring-gray-700 dark:hover:bg-gray-800 dark:active:bg-gray-700 dark:active:ring-gray-700";
   const colouredButton = colour => `disabled:pointer-events-none disabled:opacity-50 rounded px-2 py-0.5 text-sm ring-1 duration-[50ms] hover:shadow select-none w-fit h-fit bg-${colour}-500 text-white ring-${colour}-600 hover:shadow-${colour}-600 active:bg-${colour}-600 dark:bg-${colour}-700 dark:ring-${colour}-600 dark:hover:shadow-${colour}-600 dark:active:bg-${colour}-600`;
   const colouredMinimalButton = colour => `disabled:pointer-events-none disabled:opacity-50 rounded px-2 py-0.5 text-sm ring-1 duration-[50ms] hover:shadow select-none w-fit h-fit bg-transparent text-black ring-transparent hover:shadow-none hover:ring-${colour}-600 hover:bg-${colour}-500 active:bg-${colour}-600 active:ring-${colour}-600 dark:text-white dark:hover:ring-${colour}-600 dark:hover:bg-${colour}-700 dark:active:ring-${colour}-600 dark:active:bg-${colour}-600`
 
-  const settingsSelectedStyle = "w-fit ml-1 px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded-t border border-gray-200 dark:border-gray-700 border-b-0 z-10";
-  const settingsUnselectedStyle = "w-fit px-2 py-1 m-[1px] ml-[5px] cursor-pointer font-thin";
-
   const headerTextColour = "!text-gray-700 dark:!text-gray-300 select-none truncate";
+  const menuButton = "rounded px-2 py-1 text-sm font-normal select-none text-black hover:bg-gray-200 dark:text-white dark:hover:bg-gray-700";
+  const menuItem = "w-full text-left px-3 py-1.5 text-sm text-black hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700";
+  const menuRow = "flex w-full items-center gap-2 px-2.5 py-1.5 text-sm text-black dark:text-white";
+  const menuRowTight = "flex w-full items-center gap-1 px-2.5 py-1.5 text-sm text-black dark:text-white";
+  const menuRowSpread = "flex w-full items-center justify-between px-3 py-1.5 text-sm text-black dark:text-white";
+  const menuArrow = "flex h-6 w-6 items-center justify-center rounded bg-gray-200/80 text-gray-700 hover:bg-gray-300 active:bg-gray-400 focus:outline-none focus:ring-0 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 dark:active:bg-gray-500";
+  const toggleButton = (active) => `flex h-6 w-6 items-center justify-center rounded border text-xs font-semibold ${active ? "bg-gray-300 border-gray-300 text-gray-900 dark:bg-gray-600 dark:border-gray-500 dark:text-white" : "bg-gray-100 border-gray-200 text-gray-700 hover:bg-gray-200 active:bg-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-600 dark:active:bg-gray-500"}`;
+  const menuPanel = "absolute left-0 top-full mt-0 w-max rounded border border-gray-200 bg-white shadow-md dark:border-gray-700 dark:bg-gray-800 flex flex-col z-50";
 
   let textEditor;
-  let statsDisplay;
-  let fileNameDisplay;
-
+  let menuBar;
+  let fontSizeInputRef;
   function calculateStats() {
     var words = textEditor.value.trim().replace("\n", " ").split(/(\s+)/).filter((word) => word.trim().length > 0).length;
     var characters = textEditor.value.replace("\n", "").replace(" ", "").length;
-    statsDisplay.innerText = `${words} Words, ${characters} Characters`;
+    setStatsText(`${words} Words, ${characters} Characters`);
 
     setTextEdited(!(textEditor.value === startingState()));
 
@@ -76,7 +89,7 @@ export default function Wisty() {
       }
       writeTextFile(filePath, textEditor.value).then(
         () => {
-          fileNameDisplay.innerText = getFileNameFromPath(filePath);
+          setFileName(getFileNameFromPath(filePath));
           setCurrentFilePath(filePath);
           setTextEdited(false);
           setStartingState(textEditor.value);
@@ -110,7 +123,7 @@ export default function Wisty() {
     textEditor.value = "";
     setStartingState("")
     setCurrentFilePath("");
-    fileNameDisplay.innerText = "";
+    setFileName("Untitled");
     setTextEdited(false);
     calculateStats();
   }
@@ -126,11 +139,14 @@ export default function Wisty() {
   const open = () => {
     clear(); // Clear all
     return openDialog().then((filePath) => {
+      if (!filePath) {
+        return;
+      }
       readTextFile(filePath).then((text) => {
         setStartingState(text);
         textEditor.value = text;
         setCurrentFilePath(filePath);
-        fileNameDisplay.innerText = getFileNameFromPath(filePath);
+        setFileName(getFileNameFromPath(filePath));
         calculateStats(); // Update words and characters (It should be 0, however its best to run the function)
       }, () => message("Error while opening file, please try again."));
     }, 
@@ -153,22 +169,161 @@ export default function Wisty() {
     }
   }
 
+  const toggleMenu = (menuName) => {
+    setOpenMenu(openMenu() === menuName ? "" : menuName);
+  }
+
+  const closeMenu = () => {
+    setOpenMenu("");
+    setFontSizeEditing(false);
+  }
+
+  const adjustFontSize = (delta) => {
+    const nextSize = Math.min(48, Math.max(8, fontSize() + delta));
+    setFontSize(nextSize);
+    setFontSizeInput(String(nextSize));
+  }
+
+  const commitFontSizeInput = () => {
+    const parsed = Number.parseInt(fontSizeInput(), 10);
+    const safeSize = Number.isNaN(parsed) ? fontSize() : parsed;
+    const clamped = Math.min(48, Math.max(8, safeSize));
+    setFontSize(clamped);
+    setFontSizeInput(String(clamped));
+    setFontSizeEditing(false);
+  }
+
+  const handleMenuLeave = (event) => {
+    if (fontSizeEditing()) {
+      return;
+    }
+    if (menuBar && event.relatedTarget && menuBar.contains(event.relatedTarget)) {
+      return;
+    }
+    closeMenu();
+  }
+
+  const switchMenuOnHover = (menuName) => {
+    if (openMenu() !== "" && openMenu() !== menuName) {
+      setOpenMenu(menuName);
+    }
+  }
+
+  onMount(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape" && aboutOpen()) {
+        setAboutOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    onCleanup(() => window.removeEventListener("keydown", handleKeyDown));
+  });
+
+  createEffect(() => {
+    if (fontSizeEditing() && fontSizeInputRef) {
+      fontSizeInputRef.focus();
+      fontSizeInputRef.select();
+    }
+  });
+
   return (
-    <div class="flex flex-col flex-grow h-full border border-gray-200 dark:border-gray-700">
-      <div data-tauri-drag-region className="flex flex-row p-2 space-x-2 border-gray-200 dark:border-gray-700 bg-gray-100/50 dark:bg-gray-800/50 w-[100%] fixed">
-        <div className="flex flex-row whitespace-nowrap mr-auto">
-          
-          <button className={`${minimalButton} ${headerTextColour} font-semibold hover:!text-gray-900 dark:hover:!text-gray-200`} onClick={openFile}>Open</button>
+    <div class="flex flex-col flex-grow h-full border border-gray-200 dark:border-gray-700" onClick={closeMenu}>
+      <div className="flex flex-row items-center h-10 px-2 border-b border-gray-200 dark:border-gray-700 bg-gray-100/70 dark:bg-gray-800/70" onClick={(event) => event.stopPropagation()}>
+        <div ref={menuBar} className="flex flex-row items-center whitespace-nowrap space-x-1" onMouseLeave={handleMenuLeave}>
+          <div className="relative">
+            <button className={menuButton} onClick={() => toggleMenu("file")} onMouseEnter={() => switchMenuOnHover("file")}>File</button>
+            {openMenu() === "file" ?
+              <div className={menuPanel}>
+                <button className={menuItem} onClick={() => { openFile(); closeMenu(); }}>Open</button>
+                <button className={menuItem} onClick={() => { newFile(); closeMenu(); }}>New</button>
+                <button className={menuItem} onClick={() => { saveFile(); closeMenu(); }}>Save</button>
+                <button className={menuItem} onClick={() => { saveFileAs(); closeMenu(); }}>Save As</button>
+              </div>
+            : null}
+          </div>
 
-          <div class="w-[1px] bg-gray-200 dark:bg-gray-700 !m-2 !my-1"/>
+          <div className="relative">
+            <button className={menuButton} onClick={() => toggleMenu("font")} onMouseEnter={() => switchMenuOnHover("font")}>Font</button>
+            {openMenu() === "font" ?
+              <div className={menuPanel}>
+                <button className={menuItem} onClick={() => { setTextFontClass("font-sans"); closeMenu(); }}>Sans</button>
+                <button className={menuItem} onClick={() => { setTextFontClass("font-serif"); closeMenu(); }}>Serif</button>
+                <button className={menuItem} onClick={() => { setTextFontClass("font-mono"); closeMenu(); }}>Mono</button>
+                <div className={menuRowSpread}>
+                  <button className={toggleButton(fontBold())} onClick={() => setFontBold(!fontBold())} aria-label="Toggle bold">B</button>
+                  <button className={toggleButton(fontItalic())} onClick={() => setFontItalic(!fontItalic())} aria-label="Toggle italic">I</button>
+                  <button className={toggleButton(fontUnderline())} onClick={() => setFontUnderline(!fontUnderline())} aria-label="Toggle underline">U</button>
+                </div>
+                <div className={menuRowTight}>
+                  <button className={menuArrow} onClick={() => adjustFontSize(-1)} aria-label="Decrease font size">
+                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="15 18 9 12 15 6" />
+                    </svg>
+                  </button>
+                  {fontSizeEditing() ?
+                    <input
+                      className="min-w-[44px] max-w-[56px] rounded border border-gray-200 bg-white px-1 text-center text-sm text-gray-900 outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                      type="text"
+                      inputMode="numeric"
+                      ref={fontSizeInputRef}
+                      value={fontSizeInput()}
+                      onInput={(event) => setFontSizeInput(event.currentTarget.value)}
+                      onBlur={commitFontSizeInput}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          commitFontSizeInput();
+                          closeMenu();
+                        } else if (event.key === "Escape") {
+                          setFontSizeInput(String(fontSize()));
+                          setFontSizeEditing(false);
+                        }
+                      }}
+                      aria-label="Font size"
+                    />
+                  :
+                    <button
+                      className="min-w-[44px] text-center text-sm text-gray-700 hover:text-gray-900 dark:text-gray-200 dark:hover:text-white"
+                      onClick={() => setFontSizeEditing(true)}
+                      aria-label="Edit font size"
+                    >
+                      {fontSize()} px
+                    </button>
+                  }
+                  <button className={menuArrow} onClick={() => adjustFontSize(1)} aria-label="Increase font size">
+                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            : null}
+          </div>
 
-          <button className={`${minimalButton} ${headerTextColour} font-semibold hover:!text-gray-900 dark:hover:!text-gray-200`} onClick={newFile}>New</button>
+          <div className="relative">
+            <button className={menuButton} onClick={() => toggleMenu("settings")} onMouseEnter={() => switchMenuOnHover("settings")}>Settings</button>
+            {openMenu() === "settings" ?
+              <div className={menuPanel}>
+                <button className={menuItem} onClick={() => { setTextWrapEnabled(!textWrapEnabled()); closeMenu(); }}>{textWrapEnabled() ? "Disable" : "Enable"} Text Wrap</button>
+                <button className={menuItem} onClick={() => { document.querySelector("html").classList.add("dark"); closeMenu(); }}>Dark Mode</button>
+                <button className={menuItem} onClick={() => { document.querySelector("html").classList.remove("dark"); closeMenu(); }}>Light Mode</button>
+                <button className={menuItem} onClick={() => { setStatusBarVisible(!statusBarVisible()); closeMenu(); }}>{statusBarVisible() ? "Hide" : "Show"} Status Bar</button>
+              </div>
+            : null}
+          </div>
 
-          <div class="w-[1px] bg-gray-200 dark:bg-gray-700 !m-2 !my-1"/>
-
-          <button className={`${minimalButton} ${headerTextColour} font-semibold hover:!text-gray-900 dark:hover:!text-gray-200`} onClick={saveFile}>Save</button>
-          <button className={`${minimalButton} ${headerTextColour} font-semibold hover:!text-gray-900 dark:hover:!text-gray-200`} onClick={saveFileAs}>Save as</button>
+          <div className="relative">
+            <button className={menuButton} onClick={() => toggleMenu("app")} onMouseEnter={() => switchMenuOnHover("app")}>App</button>
+            {openMenu() === "app" ?
+              <div className={menuPanel}>
+                <button className={menuItem} onClick={() => { setAboutOpen(true); closeMenu(); }}>About</button>
+              </div>
+            : null}
+          </div>
         </div>
+
+        <div data-tauri-drag-region className="flex-1 h-full" />
 
         <div className="flex flex-row whitespace-nowrap ml-auto space-x-0.5">
           <button className={`!p-1 ${colouredMinimalButton("green")}`} onClick={() => appWindow.minimize()}>
@@ -193,60 +348,53 @@ export default function Wisty() {
         </div>
       </div>
 
-      <div data-tauri-drag-region className={`flex flex-col text-sm bg-gray-100/50 dark:bg-gray-800/50 fixed mt-[40px] w-[100%] ${headerTextColour}`}>
-        <div data-tauri-drag-region className="flex flex-row px-1 w-[100%]">
-          <div className="flex !flex-row mr-auto">
-            <span className={selectedSettingsTab() === "display" ? settingsSelectedStyle: settingsUnselectedStyle} onClick={() => setSelectedSettingsTab("display")}>Display</span>
-            <span className={selectedSettingsTab() === "theme" ? settingsSelectedStyle: settingsUnselectedStyle} onClick={() => setSelectedSettingsTab("theme")}>Theme</span>
-            <span className={selectedSettingsTab() === "about" ? settingsSelectedStyle: settingsUnselectedStyle} onClick={() => setSelectedSettingsTab("about")}>About</span>
-          </div>
-          <div className="flex flex-row ml-auto">
-            <span ref={fileNameDisplay} className="w-fit px-1.5 py-1 m-[1px] truncate">
-              {textEdited() ?
-                <i>
-                  Untitled
-                </i>  
-              :
-                <>
-                  Untitled
-                </>
-              }
-            </span>
-            
-            <div class="w-[1px] bg-gray-200 dark:bg-gray-700 !m-1 !my-2"/>
-
-            <span ref={statsDisplay} className="w-fit px-1.5 py-1 m-[1px] truncate font-thin">0 Words, 0 Chars</span>
-          </div>
-        </div>
-        <div className="flex flex-row whitespace-nowrap overflow-auto bg-gray-100 dark:bg-gray-800 -mt-[1px] border-y border-gray-200 dark:border-gray-700 px-2 py-2">
-          {selectedSettingsTab() === "display" ?
-            <>
-              <button className={`${minimalButton} ${headerTextColour}`} onClick={() => setTextWrapEnabled(!textWrapEnabled())}>{textWrapEnabled() ? "Disable": "Enable"} Text Wrap</button>
-          
-              <div class="w-[1px] bg-gray-200 dark:bg-gray-700 !m-1.5 !my-1"/>
-
-              <button className={`${minimalButton} ${headerTextColour}`} onClick={() => setTextFontClass("font-sans")}>Sans</button>
-              <button className={`${minimalButton} ${headerTextColour} font-serif`} onClick={() => setTextFontClass("font-serif")}>Serif</button>
-              <button className={`${minimalButton} ${headerTextColour} font-mono`} onClick={() => setTextFontClass("font-mono")}>Mono</button>
-            </>
-          :selectedSettingsTab() === "theme" ?
-            <>
-              <button className={`${minimalButton} ${headerTextColour}`} onClick={() => document.querySelector("html").classList.add("dark")}>Dark Mode</button>
-              <button className={`${minimalButton} ${headerTextColour}`} onClick={() => document.querySelector("html").classList.remove("dark")}>Light Mode</button>
-            </>
-          :selectedSettingsTab() === "about" ?
-            <>
-              <button className={`${colouredButton("blue")} mr-auto`} onClick={() => openInDefault("https://github.com/timothy-strange/wisty")}>Go To GitHub</button>
-
-              <span className={`${headerTextColour} ml-auto px-2 py-0.5`}>Platform: {platformName()}, Version: {version()}</span>
-            </>
-          :null}
-        </div>
+      <div className="flex-1 w-[100%] text-black dark:text-white text-sm overflow-auto relative">
+        <textarea spellCheck={false} onInput={() => { calculateStats(); setTextEdited(true) }} wrap={textWrapEnabled() ? "on" : "off"} ref={textEditor} class={`p-3 w-full h-full outline-none resize-none bg-transparent cursor-auto ${textFontClass()}`} style={{ "font-size": `${fontSize()}px`, "line-height": "1.4", "font-weight": fontBold() ? "700" : "400", "font-style": fontItalic() ? "italic" : "normal", "text-decoration": fontUnderline() ? "underline" : "none" }}/>
       </div>
 
-      <div className="mt-[112px] w-[100%] h-[100%] text-black dark:text-white text-sm overflow-auto relative">
-        <textarea spellCheck={false} onInput={() => { calculateStats(); setTextEdited(true) }} wrap={textWrapEnabled() ? "on": "off"} ref={textEditor} class={`p-3 w-full h-full outline-none resize-none bg-transparent -mb-[5px] cursor-auto ${textFontClass()}`}/>
-      </div>
+      {statusBarVisible() ?
+        <div className="flex flex-row items-center h-8 px-2 border-t border-gray-200 dark:border-gray-700 bg-gray-100/70 dark:bg-gray-800/70 text-xs">
+          <span className="w-fit truncate text-gray-700 dark:text-gray-300">
+            {textEdited() ?
+              <i>
+                {fileName()}
+              </i>
+            :
+              <>
+                {fileName()}
+              </>
+            }
+          </span>
+
+          <div class="w-[1px] bg-gray-200 dark:bg-gray-700 !mx-2 !my-1"/>
+
+          <span className="w-fit truncate font-thin text-gray-700 dark:text-gray-300">{statsText()}</span>
+        </div>
+      : null}
+
+      {aboutOpen() ?
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setAboutOpen(false)}>
+          <div className="w-[360px] rounded border border-gray-200 bg-white p-4 shadow-lg dark:border-gray-700 dark:bg-gray-800" onClick={(event) => event.stopPropagation()}>
+            <div className="flex flex-row items-start">
+              <div className="mr-auto">
+                <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">Wisty</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">Version {version()}</div>
+              </div>
+              <button className={`${minimalButton} ${headerTextColour}`} onClick={() => setAboutOpen(false)}>Close</button>
+            </div>
+
+            <div className="mt-3 space-y-1 text-sm text-gray-700 dark:text-gray-300">
+              <div>License: GPL-3.0</div>
+              <div>Platform: {platformName()}</div>
+              <div>Copyright 2026</div>
+            </div>
+
+            <div className="mt-4 flex flex-row items-center">
+              <button className={`${colouredButton("blue")}`} onClick={() => openInDefault("https://github.com/timothy-strange/wisty")}>GitHub Repo</button>
+            </div>
+          </div>
+        </div>
+      : null}
     </div>
   )
 }
