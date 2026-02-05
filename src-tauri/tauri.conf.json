@@ -3,71 +3,65 @@
   "build": {
     "beforeBuildCommand": "npm run build",
     "beforeDevCommand": "npm run dev",
-    "devPath": "http://localhost:5173",
-    "distDir": "../dist"
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5173"
   },
-  "package": {
-    "productName": "Parchment",
-    "version": "1.0.0"
-  },
-  "tauri": {
-    "allowlist": {
-      "fs": { "writeFile": true, "readFile": true },
-      "os": { "all": true },
-      "dialog": { "open": true, "save": true, "ask": true, "message": true },
-      "window": { "maximize": true, "unmaximize": true, "minimize": true, "unminimize": true, "close": true, "startDragging": true },
-      "shell": { "open": true }
+  "bundle": {
+    "active": true,
+    "category": "Utility",
+    "copyright": "",
+    "targets": "all",
+    "externalBin": [],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": ""
     },
-    "bundle": {
-      "active": true,
-      "category": "Utility",
-      "copyright": "",
+    "longDescription": "",
+    "macOS": {
+      "entitlements": null,
+      "exceptionDomain": "",
+      "frameworks": [],
+      "providerShortName": null,
+      "signingIdentity": null
+    },
+    "resources": [],
+    "shortDescription": "",
+    "linux": {
       "deb": {
         "depends": []
-      },
-      "externalBin": [],
-      "icon": [
-        "icons/32x32.png",
-        "icons/128x128.png",
-        "icons/128x128@2x.png",
-        "icons/icon.icns",
-        "icons/icon.ico"
-      ],
-      "identifier": "com.tywil04.Parchment",
-      "longDescription": "",
-      "macOS": {
-        "entitlements": null,
-        "exceptionDomain": "",
-        "frameworks": [],
-        "providerShortName": null,
-        "signingIdentity": null
-      },
-      "resources": [],
-      "shortDescription": "",
-      "targets": "all",
-      "windows": {
-        "certificateThumbprint": null,
-        "digestAlgorithm": "sha256",
-        "timestampUrl": ""
       }
-    },
-    "macOSPrivateApi": true,
-    "security": {
-      "csp": "default-src blob: data: filesystem: ws: wss: http: https: tauri: 'self' img-src: 'self'"
-    },
-    "updater": {
-      "active": false
-    },
+    }
+  },
+  "productName": "wisty",
+  "mainBinaryName": "wisty",
+  "version": "1.0.0",
+  "identifier": "timothy-strange.wisty",
+  "plugins": {},
+  "app": {
     "windows": [
       {
         "fullscreen": false,
         "height": 760,
         "resizable": true,
-        "title": "Parchment",
+        "title": "wisty",
         "width": 580,
         "decorations": false,
-        "transparent": true
+        "transparent": false,
+        "useHttpsScheme": true
       }
-    ]
+    ],
+    "security": {
+      "csp": "default-src blob: data: filesystem: ws: wss: http: https: tauri: 'self' img-src: 'self'; connect-src ipc: http://ipc.localhost",
+      "devCsp": "default-src blob: data: filesystem: ws: wss: http: https: tauri: 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' blob: data: http: https:; style-src 'self' 'unsafe-inline' http: https:; img-src 'self' data: blob: http: https:; connect-src ipc: http://ipc.localhost ws: wss: http: https:;"
+    },
+    "macOSPrivateApi": true
   }
 }

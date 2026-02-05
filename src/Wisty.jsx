@@ -1,16 +1,17 @@
 import { createSignal } from "solid-js";
 
-import { appWindow } from "@tauri-apps/api/window";
-import { save as saveDialog, open as openDialog, ask as askDialog, message } from "@tauri-apps/api/dialog"
-import { readTextFile, writeFile } from "@tauri-apps/api/fs";
-import { open as openInDefault } from '@tauri-apps/api/shell';
-import { type } from "@tauri-apps/api/os";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { save as saveDialog, open as openDialog, ask as askDialog, message } from "@tauri-apps/plugin-dialog"
+import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
+import { open as openInDefault } from '@tauri-apps/plugin-shell';
+import { type } from "@tauri-apps/plugin-os";
 import { getVersion } from "@tauri-apps/api/app"
+const appWindow = getCurrentWebviewWindow()
 
-let platformName = "";
-let version = "";
-type().then(data => platformName = data);
-getVersion().then(data => version = data);
+const [platformName, setPlatformName] = createSignal("");
+const [version, setVersion] = createSignal("");
+setPlatformName(type());
+getVersion().then(setVersion);
 
 if (window.matchMedia('(prefers-color-scheme: dark)').matches === true) {
   document.querySelector("html").classList.add("dark");
@@ -24,12 +25,13 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener("change", eve
   }
 })
 
-export default function Parchment() {
+export default function Wisty() {
   const [selectedSettingsTab, setSelectedSettingsTab] = createSignal("display");
   const [startingState, setStartingState] = createSignal("");
   const [textEdited, setTextEdited] = createSignal(false);
   const [currentFilePath, setCurrentFilePath] = createSignal("");
   const [textWrapEnabled, setTextWrapEnabled] = createSignal(false);
+  const [textFontClass, setTextFontClass] = createSignal("font-sans");
 
   const regularButton = "disabled:pointer-events-none disabled:opacity-50 rounded px-2 py-0.5 text-sm ring-1 duration-[50ms] hover:shadow select-none w-fit h-fit bg-gray-100 text-black ring-gray-200 hover:shadow-gray-200 active:bg-gray-200 dark:bg-gray-800 dark:text-white dark:ring-gray-700 dark:hover:shadow-gray-700 dark:active:bg-gray-700";
   const minimalButton = "disabled:pointer-events-none disabled:opacity-50 rounded px-2 py-0.5 text-sm ring-1 duration-[50ms] hover:shadow select-none w-fit h-fit bg-transparent text-black ring-transparent hover:ring-gray-200 hover:bg-gray-100 active:bg-gray-200 active:ring-gray-200 dark:text-white dark:hover:ring-gray-700 dark:hover:bg-gray-800 dark:active:bg-gray-700 dark:active:ring-gray-700";
@@ -69,7 +71,10 @@ export default function Parchment() {
 
   const saveFileAs = () => {
     return saveDialog().then((filePath) => {
-      writeFile({contents: textEditor.value, path: filePath}).then(
+      if (!filePath) {
+        return;
+      }
+      writeTextFile(filePath, textEditor.value).then(
         () => {
           fileNameDisplay.innerText = getFileNameFromPath(filePath);
           setCurrentFilePath(filePath);
@@ -84,7 +89,7 @@ export default function Parchment() {
   const saveFile = () => {
     if (currentFilePath() !== "") {
       return new Promise((success, failure) => {
-        writeFile({contents: textEditor.value, path: currentFilePath()}).then(
+        writeTextFile(currentFilePath(), textEditor.value).then(
           () => {
             setTextEdited(false);
             setStartingState(textEditor.value);
@@ -153,16 +158,16 @@ export default function Parchment() {
       <div data-tauri-drag-region className="flex flex-row p-2 space-x-2 border-gray-200 dark:border-gray-700 bg-gray-100/50 dark:bg-gray-800/50 w-[100%] fixed">
         <div className="flex flex-row whitespace-nowrap mr-auto">
           
-          <button className={`${minimalButton} ${headerTextColour} font-semibold hover:!text-gray-200`} onClick={openFile}>Open</button>
+          <button className={`${minimalButton} ${headerTextColour} font-semibold hover:!text-gray-900 dark:hover:!text-gray-200`} onClick={openFile}>Open</button>
 
           <div class="w-[1px] bg-gray-200 dark:bg-gray-700 !m-2 !my-1"/>
 
-          <button className={`${minimalButton} ${headerTextColour} font-semibold hover:!text-gray-200`} onClick={newFile}>New</button>
+          <button className={`${minimalButton} ${headerTextColour} font-semibold hover:!text-gray-900 dark:hover:!text-gray-200`} onClick={newFile}>New</button>
 
           <div class="w-[1px] bg-gray-200 dark:bg-gray-700 !m-2 !my-1"/>
 
-          <button className={`${minimalButton} ${headerTextColour} font-semibold hover:!text-gray-200`} onClick={saveFile}>Save</button>
-          <button className={`${minimalButton} ${headerTextColour} font-semibold hover:!text-gray-200`} onClick={saveFileAs}>Save as</button>
+          <button className={`${minimalButton} ${headerTextColour} font-semibold hover:!text-gray-900 dark:hover:!text-gray-200`} onClick={saveFile}>Save</button>
+          <button className={`${minimalButton} ${headerTextColour} font-semibold hover:!text-gray-900 dark:hover:!text-gray-200`} onClick={saveFileAs}>Save as</button>
         </div>
 
         <div className="flex flex-row whitespace-nowrap ml-auto space-x-0.5">
@@ -220,9 +225,9 @@ export default function Parchment() {
           
               <div class="w-[1px] bg-gray-200 dark:bg-gray-700 !m-1.5 !my-1"/>
 
-              <button className={`${minimalButton} ${headerTextColour}`} onClick={() => textEditor.classList.add("font-sans")}>Sans</button>
-              <button className={`${minimalButton} ${headerTextColour} font-serif`} onClick={() => textEditor.classList.add("font-serif")}>Serif</button>
-              <button className={`${minimalButton} ${headerTextColour} font-mono`} onClick={() => textEditor.classList.add("font-mono")}>Mono</button>
+              <button className={`${minimalButton} ${headerTextColour}`} onClick={() => setTextFontClass("font-sans")}>Sans</button>
+              <button className={`${minimalButton} ${headerTextColour} font-serif`} onClick={() => setTextFontClass("font-serif")}>Serif</button>
+              <button className={`${minimalButton} ${headerTextColour} font-mono`} onClick={() => setTextFontClass("font-mono")}>Mono</button>
             </>
           :selectedSettingsTab() === "theme" ?
             <>
@@ -231,16 +236,16 @@ export default function Parchment() {
             </>
           :selectedSettingsTab() === "about" ?
             <>
-              <button className={`${colouredButton("blue")} mr-auto`} onClick={() => openInDefault("https://github.com/tywil04/tauri-notepad")}>Go To GitHub</button>
+              <button className={`${colouredButton("blue")} mr-auto`} onClick={() => openInDefault("https://github.com/timothy-strange/wisty")}>Go To GitHub</button>
 
-              <span className={`${headerTextColour} ml-auto px-2 py-0.5`}>Platform: {platformName}, Version: {version}</span>
+              <span className={`${headerTextColour} ml-auto px-2 py-0.5`}>Platform: {platformName()}, Version: {version()}</span>
             </>
           :null}
         </div>
       </div>
 
       <div className="mt-[112px] w-[100%] h-[100%] text-black dark:text-white text-sm overflow-auto relative">
-        <textarea spellCheck={false} onInput={() => { calculateStats(); setTextEdited(true) }} wrap={textWrapEnabled() ? "on": "off"} ref={textEditor} class="p-3 w-full h-full outline-none resize-none bg-transparent -mb-[5px] cursor-auto"/>
+        <textarea spellCheck={false} onInput={() => { calculateStats(); setTextEdited(true) }} wrap={textWrapEnabled() ? "on": "off"} ref={textEditor} class={`p-3 w-full h-full outline-none resize-none bg-transparent -mb-[5px] cursor-auto ${textFontClass()}`}/>
       </div>
     </div>
   )

@@ -1,8 +1,9 @@
 {
-  "name": "parchment",
-  "author": "Tyler Williams <github.public.6d2617ee@alias.tylerw.co.uk> (https://github.com/tywil04)",
+  "name": "wisty",
+  "author": "Parchment by Tyler Williams (https://github.com/tywil04); Wisty fork by Timothy Strange (https://github.com/timothy-strange)",
   "version": "1.0.0",
-  "description": "A minimal text editor written using web technologies for Windows, Linux and MacOS",
+  "description": "A simple text editor for Linux. A fork of Parchment updated to use Tauri 2.0 and libwebkit2gtk-4.1 for Ubuntu 24.04.",
+  "repository": "https://github.com/timothy-strange/wisty",
   "scripts": {
     "start": "vite",
     "dev": "vite",
@@ -12,7 +13,7 @@
   },
   "license": "GPL-3.0",
   "devDependencies": {
-    "@tauri-apps/cli": "^1.0.0",
+    "@tauri-apps/cli": "^2.10.0",
     "autoprefixer": "^10.4.7",
     "postcss": "^8.4.14",
     "tailwindcss": "^3.1.3",
@@ -20,7 +21,11 @@
     "vite-plugin-solid": "^2.2.6"
   },
   "dependencies": {
-    "@tauri-apps/api": "^1.0.1",
+    "@tauri-apps/api": "^2.10.1",
+    "@tauri-apps/plugin-dialog": "^2.6.0",
+    "@tauri-apps/plugin-fs": "^2.4.5",
+    "@tauri-apps/plugin-os": "^2.3.2",
+    "@tauri-apps/plugin-shell": "^2.3.5",
     "solid-js": "^1.4.2"
   }
 }

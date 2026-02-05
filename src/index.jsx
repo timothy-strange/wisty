@@ -2,9 +2,9 @@
 import { render } from 'solid-js/web';
 import "tailwindcss/tailwind.css";
 import './index.css';
-import Parchment from './Parchment.jsx';
+import Wisty from './Wisty.jsx';
 
 render(
-  () => <Parchment/>, 
+  () => <Wisty/>, 
   document.getElementById('root')
 );
