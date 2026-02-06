@@ -50,10 +50,12 @@
       {
         "fullscreen": false,
         "height": 760,
+        "minHeight": 120,
+        "minWidth": 400,
         "resizable": true,
         "title": "wisty",
         "width": 580,
-        "decorations": false,
+        "decorations": true,
         "transparent": false,
         "useHttpsScheme": true
       }

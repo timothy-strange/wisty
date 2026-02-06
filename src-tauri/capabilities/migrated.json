@@ -26,6 +26,8 @@
     "core:window:allow-unminimize",
     "core:window:allow-close",
     "core:window:allow-start-dragging",
+    "core:window:allow-set-size",
+    "core:window:allow-set-position",
     "shell:allow-open",
     "dialog:allow-open",
     "dialog:allow-save",
@@ -43,6 +45,8 @@
     "os:default",
     "fs:default",
     "shell:default",
-    "fs:write-all"
+    "fs:write-all",
+    "log:default",
+    "store:default"
   ]
 }

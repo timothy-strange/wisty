@@ -1,12 +1,13 @@
 import { createEffect, createSignal, onCleanup, onMount } from "solid-js";
 
-import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { save as saveDialog, open as openDialog, ask as askDialog, message } from "@tauri-apps/plugin-dialog"
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { open as openInDefault } from '@tauri-apps/plugin-shell';
 import { type } from "@tauri-apps/plugin-os";
 import { getVersion } from "@tauri-apps/api/app"
-const appWindow = getCurrentWebviewWindow()
+import { Store } from "@tauri-apps/plugin-store";
+const appWindow = getCurrentWindow()
 
 const [platformName, setPlatformName] = createSignal("");
 const [version, setVersion] = createSignal("");
@@ -34,14 +35,12 @@ export default function Wisty() {
   const [fontSize, setFontSize] = createSignal(14);
   const [fontSizeEditing, setFontSizeEditing] = createSignal(false);
   const [fontSizeInput, setFontSizeInput] = createSignal("14");
-  const [fontBold, setFontBold] = createSignal(false);
-  const [fontItalic, setFontItalic] = createSignal(false);
-  const [fontUnderline, setFontUnderline] = createSignal(false);
   const [statusBarVisible, setStatusBarVisible] = createSignal(true);
   const [openMenu, setOpenMenu] = createSignal("");
   const [aboutOpen, setAboutOpen] = createSignal(false);
   const [fileName, setFileName] = createSignal("Untitled");
   const [statsText, setStatsText] = createSignal("0 Words, 0 Chars");
+  const [storeReady, setStoreReady] = createSignal(false);
 
   const minimalButton = "disabled:pointer-events-none disabled:opacity-50 rounded px-2 py-0.5 text-sm ring-1 duration-[50ms] hover:shadow select-none w-fit h-fit bg-transparent text-black ring-transparent hover:ring-gray-200 hover:bg-gray-100 active:bg-gray-200 active:ring-gray-200 dark:text-white dark:hover:ring-gray-700 dark:hover:bg-gray-800 dark:active:bg-gray-700 dark:active:ring-gray-700";
   const colouredButton = colour => `disabled:pointer-events-none disabled:opacity-50 rounded px-2 py-0.5 text-sm ring-1 duration-[50ms] hover:shadow select-none w-fit h-fit bg-${colour}-500 text-white ring-${colour}-600 hover:shadow-${colour}-600 active:bg-${colour}-600 dark:bg-${colour}-700 dark:ring-${colour}-600 dark:hover:shadow-${colour}-600 dark:active:bg-${colour}-600`;
@@ -50,16 +49,14 @@ export default function Wisty() {
   const headerTextColour = "!text-gray-700 dark:!text-gray-300 select-none truncate";
   const menuButton = "rounded px-2 py-1 text-sm font-normal select-none text-black hover:bg-gray-200 dark:text-white dark:hover:bg-gray-700";
   const menuItem = "w-full text-left px-3 py-1.5 text-sm text-black hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700";
-  const menuRow = "flex w-full items-center gap-2 px-2.5 py-1.5 text-sm text-black dark:text-white";
   const menuRowTight = "flex w-full items-center gap-1 px-2.5 py-1.5 text-sm text-black dark:text-white";
-  const menuRowSpread = "flex w-full items-center justify-between px-3 py-1.5 text-sm text-black dark:text-white";
   const menuArrow = "flex h-6 w-6 items-center justify-center rounded bg-gray-200/80 text-gray-700 hover:bg-gray-300 active:bg-gray-400 focus:outline-none focus:ring-0 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 dark:active:bg-gray-500";
-  const toggleButton = (active) => `flex h-6 w-6 items-center justify-center rounded border text-xs font-semibold ${active ? "bg-gray-300 border-gray-300 text-gray-900 dark:bg-gray-600 dark:border-gray-500 dark:text-white" : "bg-gray-100 border-gray-200 text-gray-700 hover:bg-gray-200 active:bg-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-600 dark:active:bg-gray-500"}`;
   const menuPanel = "absolute left-0 top-full mt-0 w-max rounded border border-gray-200 bg-white shadow-md dark:border-gray-700 dark:bg-gray-800 flex flex-col z-50";
 
   let textEditor;
   let menuBar;
   let fontSizeInputRef;
+  let settingsStore;
   function calculateStats() {
     var words = textEditor.value.trim().replace("\n", " ").split(/(\s+)/).filter((word) => word.trim().length > 0).length;
     var characters = textEditor.value.replace("\n", "").replace(" ", "").length;
@@ -218,6 +215,21 @@ export default function Wisty() {
 
     window.addEventListener("keydown", handleKeyDown);
 
+    const initStore = async () => {
+      settingsStore = new Store("settings.json");
+      try {
+        const storedFontSize = await settingsStore.get("fontSize");
+        if (typeof storedFontSize === "number" && Number.isFinite(storedFontSize)) {
+          setFontSize(storedFontSize);
+          setFontSizeInput(String(storedFontSize));
+        }
+      } catch {
+        // ignore store read failures
+      }
+      setStoreReady(true);
+    };
+    void initStore();
+
     onCleanup(() => window.removeEventListener("keydown", handleKeyDown));
   });
 
@@ -228,9 +240,17 @@ export default function Wisty() {
     }
   });
 
+  createEffect(() => {
+    if (!storeReady() || !settingsStore) {
+      return;
+    }
+    void settingsStore.set("fontSize", fontSize());
+    void settingsStore.save();
+  });
+
   return (
-    <div class="flex flex-col flex-grow h-full border border-gray-200 dark:border-gray-700" onClick={closeMenu}>
-      <div className="flex flex-row items-center h-10 px-2 border-b border-gray-200 dark:border-gray-700 bg-gray-100/70 dark:bg-gray-800/70" onClick={(event) => event.stopPropagation()}>
+    <div class="relative flex flex-col flex-grow h-full border border-gray-200 dark:border-gray-700" onClick={closeMenu}>
+      <div className="flex flex-row items-center h-9 px-2 border-b border-gray-200 dark:border-gray-700 bg-gray-100/70 dark:bg-gray-800/70" onClick={(event) => event.stopPropagation()}>
         <div ref={menuBar} className="flex flex-row items-center whitespace-nowrap space-x-1" onMouseLeave={handleMenuLeave}>
           <div className="relative">
             <button className={menuButton} onClick={() => toggleMenu("file")} onMouseEnter={() => switchMenuOnHover("file")}>File</button>
@@ -251,11 +271,6 @@ export default function Wisty() {
                 <button className={menuItem} onClick={() => { setTextFontClass("font-sans"); closeMenu(); }}>Sans</button>
                 <button className={menuItem} onClick={() => { setTextFontClass("font-serif"); closeMenu(); }}>Serif</button>
                 <button className={menuItem} onClick={() => { setTextFontClass("font-mono"); closeMenu(); }}>Mono</button>
-                <div className={menuRowSpread}>
-                  <button className={toggleButton(fontBold())} onClick={() => setFontBold(!fontBold())} aria-label="Toggle bold">B</button>
-                  <button className={toggleButton(fontItalic())} onClick={() => setFontItalic(!fontItalic())} aria-label="Toggle italic">I</button>
-                  <button className={toggleButton(fontUnderline())} onClick={() => setFontUnderline(!fontUnderline())} aria-label="Toggle underline">U</button>
-                </div>
                 <div className={menuRowTight}>
                   <button className={menuArrow} onClick={() => adjustFontSize(-1)} aria-label="Decrease font size">
                     <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -323,33 +338,10 @@ export default function Wisty() {
           </div>
         </div>
 
-        <div data-tauri-drag-region className="flex-1 h-full" />
-
-        <div className="flex flex-row whitespace-nowrap ml-auto space-x-0.5">
-          <button className={`!p-1 ${colouredMinimalButton("green")}`} onClick={() => appWindow.minimize()}>
-            <svg className={`h-4 w-4 ${headerTextColour}`} viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
-              <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-          </button>
-          <button className={`!p-1.5 ${colouredMinimalButton("yellow")}`} onClick={() => appWindow.toggleMaximize()}>
-            <svg className={`h-3 w-3 ${headerTextColour}`} viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
-              <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
-              <rect x="4" y="4" width="16" height="16" rx="2" />
-            </svg>
-          </button>
-          <button className={`!p-1 ${colouredMinimalButton("red")}`} onClick={closeApplication}>
-            <svg className={`h-4 w-4 ${headerTextColour}`} viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
-              <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
       </div>
 
-      <div className="flex-1 w-[100%] text-black dark:text-white text-sm overflow-auto relative">
-        <textarea spellCheck={false} onInput={() => { calculateStats(); setTextEdited(true) }} wrap={textWrapEnabled() ? "on" : "off"} ref={textEditor} class={`p-3 w-full h-full outline-none resize-none bg-transparent cursor-auto ${textFontClass()}`} style={{ "font-size": `${fontSize()}px`, "line-height": "1.4", "font-weight": fontBold() ? "700" : "400", "font-style": fontItalic() ? "italic" : "normal", "text-decoration": fontUnderline() ? "underline" : "none" }}/>
+      <div className="flex-1 min-h-0 w-[100%] text-black dark:text-white text-sm overflow-hidden relative">
+        <textarea spellCheck={false} onInput={() => { calculateStats(); setTextEdited(true) }} wrap={textWrapEnabled() ? "on" : "off"} ref={textEditor} class={`p-3 w-full h-full outline-none resize-none bg-transparent cursor-auto overflow-auto ${textFontClass()}`} style={{ "font-size": `${fontSize()}px`, "line-height": "1.4" }}/>
       </div>
 
       {statusBarVisible() ?
