@@ -1,21 +1,24 @@
 import { createEffect, createSignal, onCleanup, onMount } from "solid-js";
-
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { save as saveDialog, open as openDialog, message } from "@tauri-apps/plugin-dialog"
-import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
-import { open as openInDefault } from '@tauri-apps/plugin-shell';
-import { type } from "@tauri-apps/plugin-os";
-import { getVersion } from "@tauri-apps/api/app"
-import { dirname } from "@tauri-apps/api/path";
-import { Store } from "@tauri-apps/plugin-store";
-const appWindow = getCurrentWindow()
+import { getVersion } from "@tauri-apps/api/app";
+import { platform } from "@tauri-apps/plugin-os";
+import { undo, redo } from "@codemirror/commands";
+import { keymap } from "@codemirror/view";
+import AboutDialog from "./features/dialogs/AboutDialog";
+import ConfirmDiscardDialog from "./features/dialogs/ConfirmDiscardDialog";
+import useEditor from "./features/editor/useEditor";
+import useFileActions from "./features/file/useFileActions";
+import MenuBar from "./features/menus/MenuBar";
+import useSettingsStore from "./features/settings/useSettingsStore";
+import StatusBar from "./features/ui/StatusBar";
+import { ddebug, derror, dinfo, dtrace, dwarn, initDebugLog } from "./lib/debugLog";
+import { getTextStats } from "./lib/textStats";
 
-const [platformName, setPlatformName] = createSignal("");
-const [version, setVersion] = createSignal("");
-setPlatformName(type());
-getVersion().then(setVersion);
+const appWindow = getCurrentWindow();
 
 export default function Wisty() {
+  const [platformName, setPlatformName] = createSignal("");
+  const [version, setVersion] = createSignal("");
   const [startingState, setStartingState] = createSignal("");
   const [textEdited, setTextEdited] = createSignal(false);
   const [currentFilePath, setCurrentFilePath] = createSignal("");
@@ -27,223 +30,75 @@ export default function Wisty() {
   const [themeMode, setThemeMode] = createSignal("light");
   const [statusBarVisible, setStatusBarVisible] = createSignal(true);
   const [openMenu, setOpenMenu] = createSignal("");
+  const [menuAltActive, setMenuAltActive] = createSignal(false);
   const [aboutOpen, setAboutOpen] = createSignal(false);
   const [fileName, setFileName] = createSignal("Untitled");
-  const [statsText, setStatsText] = createSignal("0 Words, 0 Chars");
-  const [storeReady, setStoreReady] = createSignal(false);
-  const [lastDirectory, setLastDirectory] = createSignal("");
-  const [confirmOpen, setConfirmOpen] = createSignal(false);
+  const [statsText, setStatsText] = createSignal("0 Words, 0 Characters");
+  const [activeCloseRequestId, setActiveCloseRequestId] = createSignal(0);
 
-  const minimalButton = "disabled:pointer-events-none disabled:opacity-50 rounded px-2 py-0.5 text-sm ring-1 duration-[50ms] hover:shadow select-none w-fit h-fit bg-transparent text-black ring-transparent hover:ring-gray-200 hover:bg-gray-100 active:bg-gray-200 active:ring-gray-200 dark:text-white dark:hover:ring-gray-700 dark:hover:bg-gray-800 dark:active:bg-gray-700 dark:active:ring-gray-700";
-  const colouredButton = colour => `disabled:pointer-events-none disabled:opacity-50 rounded px-2 py-0.5 text-sm ring-1 duration-[50ms] hover:shadow select-none w-fit h-fit bg-${colour}-500 text-white ring-${colour}-600 hover:shadow-${colour}-600 active:bg-${colour}-600 dark:bg-${colour}-700 dark:ring-${colour}-600 dark:hover:shadow-${colour}-600 dark:active:bg-${colour}-600`;
-  const colouredMinimalButton = colour => `disabled:pointer-events-none disabled:opacity-50 rounded px-2 py-0.5 text-sm ring-1 duration-[50ms] hover:shadow select-none w-fit h-fit bg-transparent text-black ring-transparent hover:shadow-none hover:ring-${colour}-600 hover:bg-${colour}-500 active:bg-${colour}-600 active:ring-${colour}-600 dark:text-white dark:hover:ring-${colour}-600 dark:hover:bg-${colour}-700 dark:active:ring-${colour}-600 dark:active:bg-${colour}-600`
-
-  const headerTextColour = "!text-gray-700 dark:!text-gray-300 select-none truncate";
-  const menuButton = "rounded px-2 py-1 text-sm font-normal select-none text-black hover:bg-gray-200 dark:text-white dark:hover:bg-gray-700";
-  const menuItem = "w-full text-left px-3 py-1.5 text-sm text-black hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700 flex items-center justify-between gap-6";
-  const menuRowTight = "flex w-full items-center justify-between gap-2 px-2.5 py-1.5 text-sm text-black dark:text-white";
-  const menuArrow = "flex h-6 w-6 items-center justify-center rounded bg-gray-200/80 text-gray-700 hover:bg-gray-300 active:bg-gray-400 focus:outline-none focus:ring-0 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 dark:active:bg-gray-500";
-  const menuPanel = "absolute left-0 top-full mt-0 w-max rounded border border-gray-200 bg-white shadow-md dark:border-gray-700 dark:bg-gray-800 flex flex-col z-50";
-  const menuShortcut = "text-sm text-gray-400 dark:text-gray-500";
-
-  let textEditor;
   let menuBar;
   let fontSizeInputRef;
-  let settingsStore;
   let unlistenClose;
-  let confirmResolve;
-  let confirmPromise;
-  function calculateStats() {
-    var words = textEditor.value.trim().replace("\n", " ").split(/(\s+)/).filter((word) => word.trim().length > 0).length;
-    var characters = textEditor.value.replace("\n", "").replace(" ", "").length;
-    setStatsText(`${words} Words, ${characters} Characters`);
-
-    setTextEdited(!(textEditor.value === startingState()));
-  }
-  
-  const getFileNameFromPath = (filePath) => filePath.replace(/^.*(\\|\/|\:)/, "");
-
-  const confirmDiscard = async () => {
-    if (confirmPromise) {
-      return confirmPromise;
-    }
-    confirmPromise = new Promise((resolve) => {
-      confirmResolve = resolve;
-      setConfirmOpen(true);
-    });
-    return confirmPromise;
+  let allowImmediateClose = false;
+  let closeRequestSeq = 0;
+  let editorApi = {
+    focusEditor: () => {},
+    getEditorText: () => "",
+    setEditorText: () => {}
   };
 
-  const resolveConfirm = (value) => {
-    if (confirmResolve) {
-      confirmResolve(value);
-    }
-    confirmResolve = null;
-    confirmPromise = null;
-    setConfirmOpen(false);
-  }
+  const updateEditedState = () => {
+    const text = editorApi.getEditorText();
+    setTextEdited(text !== startingState());
+    dtrace("editor", "updateEditedState", { edited: text !== startingState(), textLength: text.length });
+  };
 
-  const discardQuery = async (good) => {
-    const shouldDiscard = await confirmDiscard();
-    if (shouldDiscard) {
-      await good();
-    } else {
-      focusEditor();
-    }
-  }
+  const updateStats = () => {
+    const text = editorApi.getEditorText();
+    const { words, characters } = getTextStats(text);
+    setStatsText(`${words} Words, ${characters} Characters`);
+    dtrace("stats", "updateStats", { words, characters });
+  };
 
-  const closeAbout = () => {
-    setAboutOpen(false);
-    focusEditor();
-  }
-
-  const cleanupCloseListener = () => {
-    if (unlistenClose) {
-      unlistenClose();
-      unlistenClose = null;
-    }
-  }
-
-
-
-  const recordLastDirectory = async (filePath) => {
-    if (!filePath) {
+  const updateStatsIfVisible = () => {
+    if (!statusBarVisible()) {
       return;
     }
-    try {
-      const directory = await dirname(filePath);
-      setLastDirectory(directory);
-      if (settingsStore) {
-        await settingsStore.set("lastDirectory", directory);
-        await settingsStore.save();
-      }
-    } catch {
-      // ignore directory lookup failures
+    updateStats();
+  };
+
+  const applyThemeMode = (mode) => {
+    const root = document.querySelector("html");
+    if (!root) {
+      dwarn("theme", "applyThemeMode aborted: missing html root", { mode });
+      return;
     }
-  }
-
-  const saveFileAs = () => {
-    return saveDialog({ defaultPath: lastDirectory() || undefined }).then((filePath) => {
-      if (!filePath) {
-        focusEditor();
-        return;
-      }
-      writeTextFile(filePath, textEditor.value).then(
-        () => {
-          setFileName(getFileNameFromPath(filePath));
-          setCurrentFilePath(filePath);
-          setTextEdited(false);
-          setStartingState(textEditor.value);
-          void recordLastDirectory(filePath);
-          focusEditor();
-        },
-        () => void message("Error while saving, please try again.").then(focusEditor));
-    }, 
-    () => void message("Error while saving, please try again.").then(focusEditor));
-  }
-
-  const saveFile = () => {
-    if (currentFilePath() !== "") {
-      return new Promise((success, failure) => {
-        writeTextFile(currentFilePath(), textEditor.value).then(
-          () => {
-            setTextEdited(false);
-            setStartingState(textEditor.value);
-            void recordLastDirectory(currentFilePath());
-            focusEditor();
-            success();
-          },
-          () => {
-            failure();
-            void message("Error while saving, please try again.").then(focusEditor)
-          }
-        );
-      })
+    if (mode === "dark") {
+      root.classList.add("dark");
     } else {
-      return saveFileAs();
+      root.classList.remove("dark");
     }
-  }
-
-  const clear = () => {
-    textEditor.value = "";
-    setStartingState("")
-    setCurrentFilePath("");
-    setFileName("Untitled");
-    setTextEdited(false);
-    calculateStats();
-  }
-
-  const focusEditor = () => {
-    if (textEditor) {
-      textEditor.focus();
-    }
-  }
-
-  const newFile = () => {
-    if (textEdited() === false) {
-      clear();
-      focusEditor();
-    } else {
-      void discardQuery(clear);
-    }
-  }
-
-  const open = () => {
-    return openDialog({ defaultPath: lastDirectory() || undefined }).then((filePath) => {
-      const resolvedPath = Array.isArray(filePath) ? filePath[0] : filePath;
-      if (!resolvedPath) {
-        focusEditor();
-        return;
-      }
-      clear();
-      readTextFile(resolvedPath).then((text) => {
-        setStartingState(text);
-        textEditor.value = text;
-        setCurrentFilePath(resolvedPath);
-        setFileName(getFileNameFromPath(resolvedPath));
-        void recordLastDirectory(resolvedPath);
-        calculateStats(); // Update words and characters (It should be 0, however its best to run the function)
-        focusEditor();
-      }, () => void message("Error while opening file, please try again.").then(focusEditor));
-    }, 
-    () => void message("Error while opening file, please try again.").then(focusEditor));
-  }
-
-  const openFile = () => {
-    if (textEdited() === false) {
-      open();
-    } else {
-      void discardQuery(open);
-    }
-  }
-
-  const closeApplication = () => {
-    appWindow.close();
-  }
-
-  const toggleMenu = (menuName) => {
-    setOpenMenu(openMenu() === menuName ? "" : menuName);
-  }
+    setThemeMode(mode);
+    dinfo("theme", "theme mode applied", { mode });
+  };
 
   const closeMenu = () => {
     setOpenMenu("");
     setFontSizeEditing(false);
-  }
+    dtrace("menu", "closeMenu");
+  };
 
-  const adjustFontSize = (delta) => {
-    const nextSize = Math.min(48, Math.max(8, fontSize() + delta));
-    setFontSize(nextSize);
-    setFontSizeInput(String(nextSize));
-  }
+  const toggleMenu = (menuName) => {
+    setOpenMenu(openMenu() === menuName ? "" : menuName);
+    ddebug("menu", "toggleMenu", { menuName, previous: openMenu() });
+  };
 
-  const commitFontSizeInput = () => {
-    const parsed = Number.parseInt(fontSizeInput(), 10);
-    const safeSize = Number.isNaN(parsed) ? fontSize() : parsed;
-    const clamped = Math.min(48, Math.max(8, safeSize));
-    setFontSize(clamped);
-    setFontSizeInput(String(clamped));
-    setFontSizeEditing(false);
-  }
+  const switchMenuOnHover = (menuName) => {
+    if (openMenu() !== "" && openMenu() !== menuName) {
+      setOpenMenu(menuName);
+      dtrace("menu", "switchMenuOnHover", { menuName });
+    }
+  };
 
   const handleMenuLeave = (event) => {
     if (fontSizeEditing()) {
@@ -253,169 +108,387 @@ export default function Wisty() {
       return;
     }
     closeMenu();
-  }
+  };
 
-  const switchMenuOnHover = (menuName) => {
-    if (openMenu() !== "" && openMenu() !== menuName) {
-      setOpenMenu(menuName);
-    }
-  }
+  const adjustFontSize = (delta) => {
+    const nextSize = Math.min(48, Math.max(8, fontSize() + delta));
+    setFontSize(nextSize);
+    setFontSizeInput(String(nextSize));
+    ddebug("font", "adjustFontSize", { delta, nextSize });
+  };
 
-  const applyThemeMode = (mode) => {
-    const root = document.querySelector("html");
-    if (!root) {
-      return;
-    }
-    if (mode === "dark") {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
-    }
-    setThemeMode(mode);
-  }
+  const commitFontSizeInput = () => {
+    const parsed = Number.parseInt(fontSizeInput(), 10);
+    const safeSize = Number.isNaN(parsed) ? fontSize() : parsed;
+    const clamped = Math.min(48, Math.max(8, safeSize));
+    setFontSize(clamped);
+    setFontSizeInput(String(clamped));
+    setFontSizeEditing(false);
+    ddebug("font", "commitFontSizeInput", { raw: fontSizeInput(), clamped });
+  };
 
   const cycleFontStyle = () => {
     const current = textFontClass();
     if (current === "font-sans") {
       setTextFontClass("font-serif");
+      ddebug("font", "cycleFontStyle", { from: current, to: "font-serif" });
       return;
     }
     if (current === "font-serif") {
       setTextFontClass("font-mono");
+      ddebug("font", "cycleFontStyle", { from: current, to: "font-mono" });
       return;
     }
     setTextFontClass("font-sans");
-  }
+    ddebug("font", "cycleFontStyle", { from: current, to: "font-sans" });
+  };
+
+  const closeApplication = (source = "unknown") => {
+    dinfo("close", "closeApplication requested", { source, closeReqId: activeCloseRequestId() });
+    void appWindow.close().then(() => {
+      dinfo("close", "closeApplication call resolved", { source, closeReqId: activeCloseRequestId() });
+    }, (err) => {
+      derror("close", "closeApplication call failed", { source, closeReqId: activeCloseRequestId(), error: String(err) });
+    });
+  };
+
+  const closeAfterDiscardConfirmation = () => {
+    allowImmediateClose = true;
+    const closeReqId = activeCloseRequestId();
+    dinfo("close", "closeAfterDiscardConfirmation requested", { closeReqId });
+    void appWindow.close().then(() => {
+      dinfo("close", "closeAfterDiscardConfirmation call resolved", { closeReqId });
+    }, (err) => {
+      allowImmediateClose = false;
+      derror("close", "closeAfterDiscardConfirmation call failed", { closeReqId, error: String(err) });
+    });
+  };
+
+  const probeConfirmDialogDom = (phase, closeReqId) => {
+    const selector = '[data-test="confirm-discard-dialog"]';
+    const runProbe = (kind) => {
+      const node = document.querySelector(selector);
+      ddebug("close", "confirm dialog dom probe", {
+        closeReqId,
+        phase,
+        probe: kind,
+        present: Boolean(node),
+        tagName: node ? node.tagName : null
+      });
+    };
+    queueMicrotask(() => runProbe("microtask"));
+    requestAnimationFrame(() => runProbe("animationFrame"));
+  };
+
+  const closeAbout = () => {
+    setAboutOpen(false);
+    editorApi.focusEditor();
+    dtrace("about", "closeAbout");
+  };
+
+  const { lastDirectory, recordLastDirectory } = useSettingsStore({
+    fontSize,
+    setFontSize,
+    setFontSizeInput,
+    textFontClass,
+    setTextFontClass,
+    statusBarVisible,
+    setStatusBarVisible,
+    textWrapEnabled,
+    setTextWrapEnabled,
+    themeMode,
+    applyThemeMode
+  });
+
+  const fileActions = useFileActions({
+    textEdited,
+    setTextEdited,
+    currentFilePath,
+    setCurrentFilePath,
+    startingState,
+    setStartingState,
+    setFileName,
+    lastDirectory,
+    recordLastDirectory,
+    updateEditedState,
+    updateStatsIfVisible,
+    currentCloseRequestId: activeCloseRequestId,
+    getEditorText: () => editorApi.getEditorText(),
+    setEditorText: (text) => editorApi.setEditorText(text),
+    focusEditor: () => editorApi.focusEditor()
+  });
+
+  createEffect(() => {
+    const confirmOpen = fileActions.confirmOpen();
+    const closeReqId = activeCloseRequestId();
+    ddebug("close", "confirmOpen state changed", { closeReqId, confirmOpen });
+    if (confirmOpen) {
+      probeConfirmDialogDom("confirm-open-true", closeReqId);
+    } else {
+      probeConfirmDialogDom("confirm-open-false", closeReqId);
+    }
+  });
+
+  createEffect(() => {
+    dtrace("close", "close flow state snapshot", {
+      closeReqId: activeCloseRequestId(),
+      textEdited: textEdited(),
+      confirmOpen: fileActions.confirmOpen(),
+      aboutOpen: aboutOpen(),
+      allowImmediateClose
+    });
+  });
+
+  createEffect(() => {
+    ddebug("about", "aboutOpen state changed", { aboutOpen: aboutOpen(), closeReqId: activeCloseRequestId() });
+  });
+
+  createEffect(() => {
+    ddebug("theme", "themeMode state changed", { themeMode: themeMode(), closeReqId: activeCloseRequestId() });
+  });
+
+  const runIfReady = (action) => (view) => {
+    if (fileActions.confirmOpen() || aboutOpen()) {
+      dtrace("shortcut", "runIfReady blocked by modal", { confirmOpen: fileActions.confirmOpen(), aboutOpen: aboutOpen() });
+      return true;
+    }
+    const result = action(view);
+    return typeof result === "boolean" ? result : true;
+  };
+
+  const buildKeymap = () => keymap.of([
+    { key: "Mod-z", run: runIfReady((view) => { ddebug("shortcut", "Mod-z"); return undo(view); }), preventDefault: true },
+    { key: "Mod-Shift-z", run: runIfReady((view) => { ddebug("shortcut", "Mod-Shift-z"); return redo(view); }), preventDefault: true },
+    { key: "Mod-y", run: runIfReady((view) => { ddebug("shortcut", "Mod-y"); return redo(view); }), preventDefault: true },
+    { key: "Mod-=", run: runIfReady(() => { ddebug("shortcut", "Mod-="); return adjustFontSize(1); }), preventDefault: true },
+    { key: "Mod-Shift-=", run: runIfReady(() => { ddebug("shortcut", "Mod-Shift-="); return adjustFontSize(1); }), preventDefault: true },
+    { key: "Mod--", run: runIfReady(() => { ddebug("shortcut", "Mod--"); return adjustFontSize(-1); }), preventDefault: true },
+    { key: "Mod-n", run: runIfReady(() => { ddebug("shortcut", "Mod-n"); return fileActions.newFile(); }), preventDefault: true },
+    { key: "Mod-o", run: runIfReady(() => { ddebug("shortcut", "Mod-o"); return fileActions.openFile(); }), preventDefault: true },
+    { key: "Mod-s", run: runIfReady(() => { ddebug("shortcut", "Mod-s"); void fileActions.saveFile(); }), preventDefault: true },
+    { key: "Mod-Shift-s", run: runIfReady(() => { ddebug("shortcut", "Mod-Shift-s"); void fileActions.saveFileAs(); }), preventDefault: true },
+    { key: "Mod-q", run: runIfReady(() => { ddebug("shortcut", "Mod-q"); return closeApplication("shortcut-mod-q"); }), preventDefault: true },
+    { key: "Mod-b", run: runIfReady(() => { ddebug("shortcut", "Mod-b"); return cycleFontStyle(); }), preventDefault: true },
+    { key: "Mod-m", run: runIfReady(() => { ddebug("shortcut", "Mod-m"); return applyThemeMode(themeMode() === "dark" ? "light" : "dark"); }), preventDefault: true },
+    { key: "Mod-j", run: runIfReady(() => { ddebug("shortcut", "Mod-j"); return setTextWrapEnabled(!textWrapEnabled()); }), preventDefault: true },
+    { key: "Mod-u", run: runIfReady(() => { ddebug("shortcut", "Mod-u"); return setStatusBarVisible(!statusBarVisible()); }), preventDefault: true },
+    { key: "F1", run: runIfReady(() => { ddebug("shortcut", "F1"); return setAboutOpen(true); }), preventDefault: true }
+  ]);
+
+  editorApi = useEditor({
+    textWrapEnabled,
+    textFontClass,
+    fontSize,
+    themeMode,
+    confirmOpen: fileActions.confirmOpen,
+    aboutOpen,
+    menuOpen: openMenu,
+    buildKeymap,
+    onDocChanged: () => {
+      updateEditedState();
+      updateStatsIfVisible();
+    }
+  });
 
   onMount(() => {
+    initDebugLog();
+    dinfo("startup", "onMount begin");
+    const resolvedPlatform = platform();
+    setPlatformName(resolvedPlatform);
+    dinfo("startup", "platform resolved", { platform: resolvedPlatform });
+    getVersion().then((resolvedVersion) => {
+      setVersion(resolvedVersion);
+      dinfo("startup", "version resolved", { version: resolvedVersion });
+    }, (err) => {
+      derror("startup", "version resolution failed", { error: String(err) });
+    });
+
     const handleKeyDown = (event) => {
-      if (confirmOpen() && event.key === "Escape") {
+      const isModM = (event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "m";
+      const isF1 = event.key === "F1";
+      if (isModM || isF1) {
+        const targetTag = event.target && event.target.tagName ? event.target.tagName : null;
+        ddebug("keyboard", "global key diagnostic", {
+          key: event.key,
+          code: event.code,
+          ctrlKey: event.ctrlKey,
+          metaKey: event.metaKey,
+          altKey: event.altKey,
+          shiftKey: event.shiftKey,
+          repeat: event.repeat,
+          defaultPrevented: event.defaultPrevented,
+          targetTag,
+          confirmOpen: fileActions.confirmOpen(),
+          aboutOpen: aboutOpen()
+        });
+      }
+
+      if (isF1) {
         event.preventDefault();
-        resolveConfirm(false);
+        if (fileActions.confirmOpen()) {
+          ddebug("keyboard", "global F1 ignored due to confirm dialog");
+          return;
+        }
+        ddebug("shortcut", "F1 global fallback fired");
+        setAboutOpen(true);
         return;
       }
-      if (confirmOpen()) {
-        return;
-      }
-      if (event.key === "Escape" && aboutOpen()) {
-        closeAbout();
-        return;
-      }
-      const key = event.key.toLowerCase();
-      if (event.ctrlKey && key === "n") {
+
+      if (isModM) {
         event.preventDefault();
-        newFile();
-        return;
-      }
-      if (event.ctrlKey && key === "o") {
-        event.preventDefault();
-        openFile();
-        return;
-      }
-      if (event.ctrlKey && !event.shiftKey && key === "s") {
-        event.preventDefault();
-        void saveFile();
-        return;
-      }
-      if (event.ctrlKey && event.shiftKey && key === "s") {
-        event.preventDefault();
-        void saveFileAs();
-        return;
-      }
-      if (event.ctrlKey && key === "q") {
-        event.preventDefault();
-        closeApplication();
-        return;
-      }
-      if (event.ctrlKey && key === "b") {
-        event.preventDefault();
-        cycleFontStyle();
-        return;
-      }
-      if (event.ctrlKey && key === "m") {
-        event.preventDefault();
+        if (fileActions.confirmOpen() || aboutOpen()) {
+          ddebug("keyboard", "global Mod-m ignored due to modal", {
+            confirmOpen: fileActions.confirmOpen(),
+            aboutOpen: aboutOpen()
+          });
+          return;
+        }
+        ddebug("shortcut", "Mod-m global fallback fired", { from: themeMode(), to: themeMode() === "dark" ? "light" : "dark" });
         applyThemeMode(themeMode() === "dark" ? "light" : "dark");
         return;
       }
-      if (event.ctrlKey && key === "j") {
-        event.preventDefault();
-        setTextWrapEnabled(!textWrapEnabled());
+
+      if (event.ctrlKey || event.metaKey || event.altKey || event.key === "Escape") {
+        dtrace("keyboard", "keydown", {
+          key: event.key,
+          ctrlKey: event.ctrlKey,
+          metaKey: event.metaKey,
+          altKey: event.altKey,
+          shiftKey: event.shiftKey
+        });
+      }
+      if (event.key === "Alt") {
+        setMenuAltActive(true);
         return;
       }
-      if (event.ctrlKey && key === "u") {
-        event.preventDefault();
-        setStatusBarVisible(!statusBarVisible());
+      if (fileActions.confirmOpen()) {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          ddebug("keyboard", "escape dismisses confirm dialog");
+          fileActions.resolveConfirm(false);
+        }
         return;
       }
-      if (event.key === "F1") {
-        event.preventDefault();
-        setAboutOpen(true);
+      if (aboutOpen()) {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          ddebug("keyboard", "escape dismisses about dialog");
+          closeAbout();
+        }
         return;
+      }
+      if (event.key === "Escape") {
+        if (openMenu() !== "") {
+          event.preventDefault();
+          ddebug("keyboard", "escape closes menu", { menu: openMenu() });
+          closeMenu();
+          setMenuAltActive(false);
+        }
+        return;
+      }
+      if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+        const key = event.key.toLowerCase();
+        let menuName = "";
+        if (key === "f") {
+          menuName = "file";
+        } else if (key === "o") {
+          menuName = "font";
+        } else if (key === "s") {
+          menuName = "settings";
+        } else if (key === "a") {
+          menuName = "app";
+        }
+        if (menuName) {
+          event.preventDefault();
+          ddebug("keyboard", "alt menu toggle", { key, menuName, previous: openMenu() });
+          setMenuAltActive(true);
+          setOpenMenu(openMenu() === menuName ? "" : menuName);
+        }
+      }
+    };
+
+    const handleKeyUp = (event) => {
+      if (event.key === "Alt") {
+        setMenuAltActive(false);
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
-    const initStore = async () => {
-      settingsStore = await Store.load("settings.json");
-      try {
-        const storedFontSize = await settingsStore.get("fontSize");
-        const storedFontClass = await settingsStore.get("fontFamily");
-        const storedStatusBar = await settingsStore.get("statusBarVisible");
-        const storedTextWrap = await settingsStore.get("textWrapEnabled");
-        const storedThemeMode = await settingsStore.get("themeMode");
-        const storedLastDirectory = await settingsStore.get("lastDirectory");
-        if (typeof storedFontSize === "number" && Number.isFinite(storedFontSize)) {
-          setFontSize(storedFontSize);
-          setFontSizeInput(String(storedFontSize));
-        }
-        if (typeof storedFontClass === "string") {
-          setTextFontClass(storedFontClass);
-        }
-        if (typeof storedStatusBar === "boolean") {
-          setStatusBarVisible(storedStatusBar);
-        }
-        if (typeof storedTextWrap === "boolean") {
-          setTextWrapEnabled(storedTextWrap);
-        }
-        if (storedThemeMode === "dark" || storedThemeMode === "light") {
-          applyThemeMode(storedThemeMode);
-        } else {
-          const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-          applyThemeMode(prefersDark ? "dark" : "light");
-        }
-        if (typeof storedLastDirectory === "string") {
-          setLastDirectory(storedLastDirectory);
-        }
-      } catch {
-        // ignore store read failures
-      }
-      setStoreReady(true);
-    };
-    void initStore();
-
-    setTimeout(() => {
-      if (textEditor) {
-        textEditor.focus();
-      }
-    }, 0);
+    window.addEventListener("keyup", handleKeyUp);
+    dinfo("startup", "window keyboard listeners attached");
 
     const setupCloseListener = async () => {
-      unlistenClose = await appWindow.onCloseRequested(async (event) => {
-        if (!textEdited()) {
-          return;
-        }
-        const shouldDiscard = await confirmDiscard();
-        if (!shouldDiscard) {
+      dinfo("close", "register onCloseRequested listener start");
+      try {
+        unlistenClose = await appWindow.onCloseRequested(async (event) => {
+          closeRequestSeq += 1;
+          const closeReqId = closeRequestSeq;
+          setActiveCloseRequestId(closeReqId);
+          ddebug("close", "onCloseRequested fired", {
+            closeReqId,
+            textEdited: textEdited(),
+            confirmOpen: fileActions.confirmOpen(),
+            aboutOpen: aboutOpen()
+          });
+          if (allowImmediateClose) {
+            allowImmediateClose = false;
+            dinfo("close", "onCloseRequested allowing immediate close", { closeReqId });
+            return;
+          }
+          if (!textEdited()) {
+            dinfo("close", "onCloseRequested allows close (no unsaved edits)", { closeReqId });
+            return;
+          }
           event.preventDefault();
-          focusEditor();
-        }
-      });
+          dinfo("close", "onCloseRequested prevented close while awaiting confirmation", { closeReqId });
+          probeConfirmDialogDom("after-prevent-default", closeReqId);
+          dinfo("close", "onCloseRequested awaiting discard confirmation", { closeReqId });
+          const shouldDiscard = await fileActions.confirmDiscard({ source: "os-close", closeReqId });
+          dinfo("close", "onCloseRequested confirmation resolved", { closeReqId, shouldDiscard });
+          if (shouldDiscard) {
+            closeAfterDiscardConfirmation();
+          } else {
+            dinfo("close", "close prevented by user decision", { closeReqId });
+            editorApi.focusEditor();
+          }
+        });
+        dinfo("close", "register onCloseRequested listener success");
+      } catch (err) {
+        derror("close", "register onCloseRequested listener failed", { error: String(err) });
+      }
     };
     void setupCloseListener();
 
     onCleanup(() => {
+      dinfo("shutdown", "onCleanup begin");
       window.removeEventListener("keydown", handleKeyDown);
-      cleanupCloseListener();
+      window.removeEventListener("keyup", handleKeyUp);
+      dinfo("shutdown", "window keyboard listeners removed");
+      if (unlistenClose) {
+        unlistenClose();
+        unlistenClose = null;
+        dinfo("shutdown", "onCloseRequested listener removed");
+      }
+      dinfo("shutdown", "onCleanup complete");
+    });
+  });
+
+  onMount(() => {
+    const handleFocus = () => dtrace("window", "focus event", { closeReqId: activeCloseRequestId() });
+    const handleBlur = () => dtrace("window", "blur event", { closeReqId: activeCloseRequestId() });
+    const handleVisibility = () => dtrace("window", "visibilitychange", {
+      closeReqId: activeCloseRequestId(),
+      visibilityState: document.visibilityState
+    });
+
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("blur", handleBlur);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    onCleanup(() => {
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("blur", handleBlur);
+      document.removeEventListener("visibilitychange", handleVisibility);
     });
   });
 
@@ -423,245 +496,70 @@ export default function Wisty() {
     if (fontSizeEditing() && fontSizeInputRef) {
       fontSizeInputRef.focus();
       fontSizeInputRef.select();
+      dtrace("font", "focus font size input");
     }
   });
 
   createEffect(() => {
-    if (!storeReady() || !settingsStore) {
-      return;
+    if (statusBarVisible()) {
+      updateStats();
     }
-    void settingsStore.set("fontSize", fontSize());
-    void settingsStore.save();
   });
 
   createEffect(() => {
-    if (!storeReady() || !settingsStore) {
-      return;
-    }
-    void settingsStore.set("fontFamily", textFontClass());
-    void settingsStore.save();
-  });
-
-  createEffect(() => {
-    if (!storeReady() || !settingsStore) {
-      return;
-    }
-    void settingsStore.set("statusBarVisible", statusBarVisible());
-    void settingsStore.save();
-  });
-
-  createEffect(() => {
-    if (!storeReady() || !settingsStore) {
-      return;
-    }
-    void settingsStore.set("textWrapEnabled", textWrapEnabled());
-    void settingsStore.save();
-  });
-
-  createEffect(() => {
-    if (!storeReady() || !settingsStore) {
-      return;
-    }
-    void settingsStore.set("themeMode", themeMode());
-    void settingsStore.save();
+    const title = fileName();
+    document.title = title;
+    void appWindow.setTitle(title);
+    dtrace("window", "title updated", { title });
   });
 
   return (
     <div class="relative flex flex-col flex-grow h-full border border-gray-200 dark:border-gray-700" onClick={closeMenu}>
-      <div className="flex flex-row items-center h-9 px-2 border-b border-gray-200 dark:border-gray-700 bg-gray-100/70 dark:bg-gray-800/70" onClick={(event) => event.stopPropagation()}>
-        <div ref={menuBar} className="flex flex-row items-center whitespace-nowrap space-x-1" onMouseLeave={handleMenuLeave}>
-          <div className="relative">
-            <button className={menuButton} onClick={() => toggleMenu("file")} onMouseEnter={() => switchMenuOnHover("file")}>File</button>
-            {openMenu() === "file" ?
-              <div className={menuPanel}>
-                <button className={menuItem} onClick={() => { openFile(); closeMenu(); }}>
-                  <span>Open</span>
-                  <span className={menuShortcut}>Ctrl+O</span>
-                </button>
-                <button className={menuItem} onClick={() => { newFile(); closeMenu(); }}>
-                  <span>New</span>
-                  <span className={menuShortcut}>Ctrl+N</span>
-                </button>
-                <button className={menuItem} onClick={() => { saveFile(); closeMenu(); }}>
-                  <span>Save</span>
-                  <span className={menuShortcut}>Ctrl+S</span>
-                </button>
-                <button className={menuItem} onClick={() => { saveFileAs(); closeMenu(); }}>
-                  <span>Save As</span>
-                  <span className={menuShortcut}>Ctrl+Shift+S</span>
-                </button>
-                <button className={menuItem} onClick={() => { closeApplication(); closeMenu(); }}>
-                  <span>Quit</span>
-                  <span className={menuShortcut}>Ctrl+Q</span>
-                </button>
-              </div>
-            : null}
-          </div>
-
-          <div className="relative">
-            <button className={menuButton} onClick={() => toggleMenu("font")} onMouseEnter={() => switchMenuOnHover("font")}>Font</button>
-            {openMenu() === "font" ?
-              <div className={menuPanel}>
-                <button className={menuItem} onClick={() => { setTextFontClass("font-sans"); closeMenu(); }}>
-                  <span>Sans{textFontClass() === "font-sans" ? " ✓" : ""}</span>
-                  <span className={menuShortcut}>Ctrl+B</span>
-                </button>
-                <button className={menuItem} onClick={() => { setTextFontClass("font-serif"); closeMenu(); }}>
-                  <span>Serif{textFontClass() === "font-serif" ? " ✓" : ""}</span>
-                  <span className={menuShortcut}>Ctrl+B</span>
-                </button>
-                <button className={menuItem} onClick={() => { setTextFontClass("font-mono"); closeMenu(); }}>
-                  <span>Mono{textFontClass() === "font-mono" ? " ✓" : ""}</span>
-                  <span className={menuShortcut}>Ctrl+B</span>
-                </button>
-                <div className={menuRowTight}>
-                  <button className={menuArrow} onClick={() => adjustFontSize(-1)} aria-label="Decrease font size">
-                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <polyline points="15 18 9 12 15 6" />
-                    </svg>
-                  </button>
-                  {fontSizeEditing() ?
-                    <input
-                      className="min-w-[44px] flex-1 rounded border border-gray-200 bg-white px-1 text-center text-sm text-gray-900 outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
-                      type="text"
-                      inputMode="numeric"
-                      ref={fontSizeInputRef}
-                      value={fontSizeInput()}
-                      onInput={(event) => setFontSizeInput(event.currentTarget.value)}
-                      onBlur={commitFontSizeInput}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          commitFontSizeInput();
-                          closeMenu();
-                        } else if (event.key === "Escape") {
-                          setFontSizeInput(String(fontSize()));
-                          setFontSizeEditing(false);
-                        }
-                      }}
-                      aria-label="Font size"
-                    />
-                  :
-                    <button
-                      className="min-w-[44px] flex-1 text-center text-sm text-gray-700 hover:text-gray-900 dark:text-gray-200 dark:hover:text-white"
-                      onClick={() => setFontSizeEditing(true)}
-                      aria-label="Edit font size"
-                    >
-                      {fontSize()} px
-                    </button>
-                  }
-                  <button className={menuArrow} onClick={() => adjustFontSize(1)} aria-label="Increase font size">
-                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <polyline points="9 18 15 12 9 6" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            : null}
-          </div>
-
-          <div className="relative">
-            <button className={menuButton} onClick={() => toggleMenu("settings")} onMouseEnter={() => switchMenuOnHover("settings")}>Settings</button>
-            {openMenu() === "settings" ?
-              <div className={menuPanel}>
-                <button className={menuItem} onClick={() => { setTextWrapEnabled(!textWrapEnabled()); closeMenu(); }}>
-                  <span>Text Wrap{textWrapEnabled() ? " ✓" : ""}</span>
-                  <span className={menuShortcut}>Ctrl+J</span>
-                </button>
-                <button className={menuItem} onClick={() => { applyThemeMode("dark"); closeMenu(); }}>
-                  <span>Dark Mode{themeMode() === "dark" ? " ✓" : ""}</span>
-                  <span className={menuShortcut}>Ctrl+M</span>
-                </button>
-                <button className={menuItem} onClick={() => { applyThemeMode("light"); closeMenu(); }}>
-                  <span>Light Mode{themeMode() === "light" ? " ✓" : ""}</span>
-                  <span className={menuShortcut}>Ctrl+M</span>
-                </button>
-                <button className={menuItem} onClick={() => { setStatusBarVisible(!statusBarVisible()); closeMenu(); }}>
-                  <span>Status Bar{statusBarVisible() ? " ✓" : ""}</span>
-                  <span className={menuShortcut}>Ctrl+U</span>
-                </button>
-              </div>
-            : null}
-          </div>
-
-          <div className="relative">
-            <button className={menuButton} onClick={() => toggleMenu("app")} onMouseEnter={() => switchMenuOnHover("app")}>App</button>
-            {openMenu() === "app" ?
-              <div className={menuPanel}>
-                <button className={menuItem} onClick={() => { setAboutOpen(true); closeMenu(); }}>
-                  <span>About</span>
-                  <span className={menuShortcut}>F1</span>
-                </button>
-              </div>
-            : null}
-          </div>
-        </div>
-
-      </div>
+      <MenuBar
+        menuBarRef={(el) => { menuBar = el; }}
+        handleMenuLeave={handleMenuLeave}
+        toggleMenu={toggleMenu}
+        switchMenuOnHover={switchMenuOnHover}
+        closeMenu={closeMenu}
+        openMenu={openMenu}
+        menuAltActive={menuAltActive}
+        platformName={platformName}
+        openFile={fileActions.openFile}
+        newFile={fileActions.newFile}
+        saveFile={fileActions.saveFile}
+        saveFileAs={fileActions.saveFileAs}
+        closeApplication={() => closeApplication("menu-quit")}
+        textFontClass={textFontClass}
+        setTextFontClass={setTextFontClass}
+        adjustFontSize={adjustFontSize}
+        fontSizeEditing={fontSizeEditing}
+        fontSizeInputRef={(el) => { fontSizeInputRef = el; }}
+        fontSizeInput={fontSizeInput}
+        setFontSizeInput={setFontSizeInput}
+        commitFontSizeInput={commitFontSizeInput}
+        setFontSizeEditing={setFontSizeEditing}
+        fontSize={fontSize}
+        textWrapEnabled={textWrapEnabled}
+        setTextWrapEnabled={setTextWrapEnabled}
+        applyThemeMode={applyThemeMode}
+        themeMode={themeMode}
+        statusBarVisible={statusBarVisible}
+        setStatusBarVisible={setStatusBarVisible}
+        setAboutOpen={setAboutOpen}
+      />
 
       <div className="flex-1 min-h-0 w-[100%] text-black dark:text-white text-sm overflow-hidden relative">
-        <textarea spellCheck={false} onInput={() => { calculateStats(); setTextEdited(true) }} wrap={textWrapEnabled() ? "on" : "off"} ref={textEditor} class={`p-3 w-full h-full outline-none resize-none bg-transparent cursor-auto overflow-auto ${textFontClass()}`} style={{ "font-size": `${fontSize()}px`, "line-height": "1.4" }}/>
+        <div ref={(el) => editorApi.setEditorHost(el)} className="h-full w-full" />
       </div>
 
-      {statusBarVisible() ?
-        <div className="flex flex-row items-center h-8 px-2 border-t border-gray-200 dark:border-gray-700 bg-gray-100/70 dark:bg-gray-800/70 text-xs">
-          <span className="w-fit truncate text-gray-700 dark:text-gray-300">
-            {textEdited() ?
-              <i>
-                {fileName()}
-              </i>
-            :
-              <>
-                {fileName()}
-              </>
-            }
-          </span>
-
-          <div class="w-[1px] bg-gray-200 dark:bg-gray-700 !mx-2 !my-1"/>
-
-          <span className="w-fit truncate font-thin text-gray-700 dark:text-gray-300">{statsText()}</span>
-        </div>
-      : null}
-
-       {confirmOpen() ?
-         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-           <div className="w-[360px] rounded border border-gray-200 bg-white p-4 shadow-lg dark:border-gray-700 dark:bg-gray-800" onClick={(event) => event.stopPropagation()}>
-             <div className="flex flex-row items-start">
-               <div className="flex-1">
-                 <div className="text-base font-semibold text-gray-900 dark:text-gray-100">Warning</div>
-                 <div className="mt-1 text-sm text-gray-600 dark:text-gray-300">You have unsaved changes</div>
-               </div>
-             </div>
-             <div className="mt-4 flex flex-row items-center justify-end gap-2">
-               <button className={minimalButton} onClick={() => resolveConfirm(false)}>Cancel</button>
-               <button className={colouredButton("red")} onClick={() => resolveConfirm(true)}>Discard</button>
-             </div>
-           </div>
-         </div>
-       : null}
-
-       {aboutOpen() ?
-         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={closeAbout}>
-           <div className="w-[360px] rounded border border-gray-200 bg-white p-4 shadow-lg dark:border-gray-700 dark:bg-gray-800" onClick={(event) => event.stopPropagation()}>
-            <div className="flex flex-row items-start">
-              <div className="mr-auto">
-                <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">Wisty</div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">Version {version()}</div>
-              </div>
-              <button className={`${minimalButton} ${headerTextColour}`} onClick={closeAbout}>Close</button>
-            </div>
-
-            <div className="mt-3 space-y-1 text-sm text-gray-700 dark:text-gray-300">
-              <div>License: GPL-3.0</div>
-              <div>Platform: {platformName()}</div>
-              <div>Copyright 2026</div>
-            </div>
-
-            <div className="mt-4 flex flex-row items-center">
-              <button className={`${colouredButton("blue")}`} onClick={() => openInDefault("https://github.com/timothy-strange/wisty")}>GitHub Repo</button>
-            </div>
-          </div>
-        </div>
-      : null}
+      {statusBarVisible() ? <StatusBar statsText={statsText()} /> : null}
+      <ConfirmDiscardDialog
+        open={fileActions.confirmOpen()}
+        closeReqId={activeCloseRequestId()}
+        onCancel={() => fileActions.resolveConfirm(false, { source: "dialog-cancel", closeReqId: activeCloseRequestId() })}
+        onDiscard={() => fileActions.resolveConfirm(true, { source: "dialog-discard", closeReqId: activeCloseRequestId() })}
+      />
+      <AboutDialog open={aboutOpen()} version={version()} platformName={platformName()} onClose={closeAbout} />
     </div>
-  )
+  );
 }

@@ -21,6 +21,10 @@
     "vite-plugin-solid": "^2.2.6"
   },
   "dependencies": {
+    "@codemirror/commands": "^6.10.2",
+    "@codemirror/search": "^6.6.0",
+    "@codemirror/state": "^6.5.4",
+    "@codemirror/view": "^6.39.12",
     "@tauri-apps/api": "^2.10.1",
     "@tauri-apps/plugin-dialog": "^2.6.0",
     "@tauri-apps/plugin-fs": "^2.4.5",
@@ -28,6 +32,7 @@
     "@tauri-apps/plugin-os": "^2.3.2",
     "@tauri-apps/plugin-shell": "^2.3.5",
     "@tauri-apps/plugin-store": "^2.4.2",
+    "codemirror": "^6.0.2",
     "solid-js": "^1.4.2"
   }
 }
