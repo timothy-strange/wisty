@@ -1,7 +1,7 @@
 import { createEffect, createSignal, onCleanup, onMount } from "solid-js";
 
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { save as saveDialog, open as openDialog, ask as askDialog, message } from "@tauri-apps/plugin-dialog"
+import { save as saveDialog, open as openDialog, message } from "@tauri-apps/plugin-dialog"
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { open as openInDefault } from '@tauri-apps/plugin-shell';
 import { type } from "@tauri-apps/plugin-os";
@@ -32,6 +32,7 @@ export default function Wisty() {
   const [statsText, setStatsText] = createSignal("0 Words, 0 Chars");
   const [storeReady, setStoreReady] = createSignal(false);
   const [lastDirectory, setLastDirectory] = createSignal("");
+  const [confirmOpen, setConfirmOpen] = createSignal(false);
 
   const minimalButton = "disabled:pointer-events-none disabled:opacity-50 rounded px-2 py-0.5 text-sm ring-1 duration-[50ms] hover:shadow select-none w-fit h-fit bg-transparent text-black ring-transparent hover:ring-gray-200 hover:bg-gray-100 active:bg-gray-200 active:ring-gray-200 dark:text-white dark:hover:ring-gray-700 dark:hover:bg-gray-800 dark:active:bg-gray-700 dark:active:ring-gray-700";
   const colouredButton = colour => `disabled:pointer-events-none disabled:opacity-50 rounded px-2 py-0.5 text-sm ring-1 duration-[50ms] hover:shadow select-none w-fit h-fit bg-${colour}-500 text-white ring-${colour}-600 hover:shadow-${colour}-600 active:bg-${colour}-600 dark:bg-${colour}-700 dark:ring-${colour}-600 dark:hover:shadow-${colour}-600 dark:active:bg-${colour}-600`;
@@ -50,6 +51,8 @@ export default function Wisty() {
   let fontSizeInputRef;
   let settingsStore;
   let unlistenClose;
+  let confirmResolve;
+  let confirmPromise;
   function calculateStats() {
     var words = textEditor.value.trim().replace("\n", " ").split(/(\s+)/).filter((word) => word.trim().length > 0).length;
     var characters = textEditor.value.replace("\n", "").replace(" ", "").length;
@@ -60,17 +63,38 @@ export default function Wisty() {
   
   const getFileNameFromPath = (filePath) => filePath.replace(/^.*(\\|\/|\:)/, "");
 
-  const confirmDiscard = async () => askDialog("You have unsaved changes", {
-    title: "Warning",
-    okLabel: "Discard",
-    cancelLabel: "Cancel",
-  });
+  const confirmDiscard = async () => {
+    if (confirmPromise) {
+      return confirmPromise;
+    }
+    confirmPromise = new Promise((resolve) => {
+      confirmResolve = resolve;
+      setConfirmOpen(true);
+    });
+    return confirmPromise;
+  };
+
+  const resolveConfirm = (value) => {
+    if (confirmResolve) {
+      confirmResolve(value);
+    }
+    confirmResolve = null;
+    confirmPromise = null;
+    setConfirmOpen(false);
+  }
 
   const discardQuery = async (good) => {
     const shouldDiscard = await confirmDiscard();
     if (shouldDiscard) {
       await good();
+    } else {
+      focusEditor();
     }
+  }
+
+  const closeAbout = () => {
+    setAboutOpen(false);
+    focusEditor();
   }
 
   const cleanupCloseListener = () => {
@@ -101,6 +125,7 @@ export default function Wisty() {
   const saveFileAs = () => {
     return saveDialog({ defaultPath: lastDirectory() || undefined }).then((filePath) => {
       if (!filePath) {
+        focusEditor();
         return;
       }
       writeTextFile(filePath, textEditor.value).then(
@@ -110,10 +135,11 @@ export default function Wisty() {
           setTextEdited(false);
           setStartingState(textEditor.value);
           void recordLastDirectory(filePath);
+          focusEditor();
         },
-        () => message("Error while saving, please try again."));
+        () => void message("Error while saving, please try again.").then(focusEditor));
     }, 
-    () => message("Error while saving, please try again."));
+    () => void message("Error while saving, please try again.").then(focusEditor));
   }
 
   const saveFile = () => {
@@ -124,11 +150,12 @@ export default function Wisty() {
             setTextEdited(false);
             setStartingState(textEditor.value);
             void recordLastDirectory(currentFilePath());
+            focusEditor();
             success();
           },
           () => {
             failure();
-            message("Error while saving, please try again.")
+            void message("Error while saving, please try again.").then(focusEditor)
           }
         );
       })
@@ -146,9 +173,16 @@ export default function Wisty() {
     calculateStats();
   }
 
+  const focusEditor = () => {
+    if (textEditor) {
+      textEditor.focus();
+    }
+  }
+
   const newFile = () => {
     if (textEdited() === false) {
       clear();
+      focusEditor();
     } else {
       void discardQuery(clear);
     }
@@ -158,6 +192,7 @@ export default function Wisty() {
     return openDialog({ defaultPath: lastDirectory() || undefined }).then((filePath) => {
       const resolvedPath = Array.isArray(filePath) ? filePath[0] : filePath;
       if (!resolvedPath) {
+        focusEditor();
         return;
       }
       clear();
@@ -168,9 +203,10 @@ export default function Wisty() {
         setFileName(getFileNameFromPath(resolvedPath));
         void recordLastDirectory(resolvedPath);
         calculateStats(); // Update words and characters (It should be 0, however its best to run the function)
-      }, () => message("Error while opening file, please try again."));
+        focusEditor();
+      }, () => void message("Error while opening file, please try again.").then(focusEditor));
     }, 
-    () => message("Error while opening file, please try again."));
+    () => void message("Error while opening file, please try again.").then(focusEditor));
   }
 
   const openFile = () => {
@@ -253,8 +289,16 @@ export default function Wisty() {
 
   onMount(() => {
     const handleKeyDown = (event) => {
+      if (confirmOpen() && event.key === "Escape") {
+        event.preventDefault();
+        resolveConfirm(false);
+        return;
+      }
+      if (confirmOpen()) {
+        return;
+      }
       if (event.key === "Escape" && aboutOpen()) {
-        setAboutOpen(false);
+        closeAbout();
         return;
       }
       const key = event.key.toLowerCase();
@@ -363,6 +407,7 @@ export default function Wisty() {
         const shouldDiscard = await confirmDiscard();
         if (!shouldDiscard) {
           event.preventDefault();
+          focusEditor();
         }
       });
     };
@@ -577,15 +622,32 @@ export default function Wisty() {
         </div>
       : null}
 
-      {aboutOpen() ?
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setAboutOpen(false)}>
-          <div className="w-[360px] rounded border border-gray-200 bg-white p-4 shadow-lg dark:border-gray-700 dark:bg-gray-800" onClick={(event) => event.stopPropagation()}>
+       {confirmOpen() ?
+         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+           <div className="w-[360px] rounded border border-gray-200 bg-white p-4 shadow-lg dark:border-gray-700 dark:bg-gray-800" onClick={(event) => event.stopPropagation()}>
+             <div className="flex flex-row items-start">
+               <div className="flex-1">
+                 <div className="text-base font-semibold text-gray-900 dark:text-gray-100">Warning</div>
+                 <div className="mt-1 text-sm text-gray-600 dark:text-gray-300">You have unsaved changes</div>
+               </div>
+             </div>
+             <div className="mt-4 flex flex-row items-center justify-end gap-2">
+               <button className={minimalButton} onClick={() => resolveConfirm(false)}>Cancel</button>
+               <button className={colouredButton("red")} onClick={() => resolveConfirm(true)}>Discard</button>
+             </div>
+           </div>
+         </div>
+       : null}
+
+       {aboutOpen() ?
+         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={closeAbout}>
+           <div className="w-[360px] rounded border border-gray-200 bg-white p-4 shadow-lg dark:border-gray-700 dark:bg-gray-800" onClick={(event) => event.stopPropagation()}>
             <div className="flex flex-row items-start">
               <div className="mr-auto">
                 <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">Wisty</div>
                 <div className="text-xs text-gray-500 dark:text-gray-400">Version {version()}</div>
               </div>
-              <button className={`${minimalButton} ${headerTextColour}`} onClick={() => setAboutOpen(false)}>Close</button>
+              <button className={`${minimalButton} ${headerTextColour}`} onClick={closeAbout}>Close</button>
             </div>
 
             <div className="mt-3 space-y-1 text-sm text-gray-700 dark:text-gray-300">
