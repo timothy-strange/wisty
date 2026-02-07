@@ -43,6 +43,8 @@ export default function useSettingsStore(options) {
         const storedFontSize = await settingsStore.get("fontSize");
         const storedFontClass = await settingsStore.get("fontFamily");
         const storedStatusBar = await settingsStore.get("statusBarVisible");
+        const storedStatusBarStatsVisible = await settingsStore.get("statusBarStatsVisible");
+        const storedStatusBarFontSize = await settingsStore.get("statusBarFontSize");
         const storedTextWrap = await settingsStore.get("textWrapEnabled");
         const storedThemeMode = await settingsStore.get("themeMode");
         const storedLastDirectory = await settingsStore.get("lastDirectory");
@@ -59,6 +61,16 @@ export default function useSettingsStore(options) {
         if (typeof storedStatusBar === "boolean") {
           options.setStatusBarVisible(storedStatusBar);
           ddebug("settings", "applied stored statusBarVisible", { storedStatusBar });
+        }
+        if (typeof storedStatusBarStatsVisible === "boolean") {
+          options.setStatusBarStatsVisible(storedStatusBarStatsVisible);
+          ddebug("settings", "applied stored statusBarStatsVisible", { storedStatusBarStatsVisible });
+        }
+        if (typeof storedStatusBarFontSize === "number" && Number.isFinite(storedStatusBarFontSize)) {
+          const clampedStatusBarFontSize = Math.min(18, Math.max(8, storedStatusBarFontSize));
+          options.setStatusBarFontSize(clampedStatusBarFontSize);
+          options.setStatusBarFontSizeInput(String(clampedStatusBarFontSize));
+          ddebug("settings", "applied stored statusBarFontSize", { storedStatusBarFontSize: clampedStatusBarFontSize });
         }
         if (typeof storedTextWrap === "boolean") {
           options.setTextWrapEnabled(storedTextWrap);
@@ -97,6 +109,14 @@ export default function useSettingsStore(options) {
 
   createEffect(() => {
     saveSetting("statusBarVisible", options.statusBarVisible());
+  });
+
+  createEffect(() => {
+    saveSetting("statusBarStatsVisible", options.statusBarStatsVisible());
+  });
+
+  createEffect(() => {
+    saveSetting("statusBarFontSize", options.statusBarFontSize());
   });
 
   createEffect(() => {

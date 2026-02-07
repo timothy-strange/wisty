@@ -29,6 +29,10 @@ export default function Wisty() {
   const [fontSizeInput, setFontSizeInput] = createSignal("14");
   const [themeMode, setThemeMode] = createSignal("light");
   const [statusBarVisible, setStatusBarVisible] = createSignal(true);
+  const [statusBarStatsVisible, setStatusBarStatsVisible] = createSignal(true);
+  const [statusBarFontSize, setStatusBarFontSize] = createSignal(12);
+  const [statusBarFontSizeEditing, setStatusBarFontSizeEditing] = createSignal(false);
+  const [statusBarFontSizeInput, setStatusBarFontSizeInput] = createSignal("12");
   const [openMenu, setOpenMenu] = createSignal("");
   const [menuAltActive, setMenuAltActive] = createSignal(false);
   const [aboutOpen, setAboutOpen] = createSignal(false);
@@ -38,6 +42,7 @@ export default function Wisty() {
 
   let menuBar;
   let fontSizeInputRef;
+  let statusBarFontSizeInputRef;
   let unlistenClose;
   let allowImmediateClose = false;
   let closeRequestSeq = 0;
@@ -61,7 +66,7 @@ export default function Wisty() {
   };
 
   const updateStatsIfVisible = () => {
-    if (!statusBarVisible()) {
+    if (!statusBarVisible() || !statusBarStatsVisible()) {
       return;
     }
     updateStats();
@@ -85,6 +90,7 @@ export default function Wisty() {
   const closeMenu = () => {
     setOpenMenu("");
     setFontSizeEditing(false);
+    setStatusBarFontSizeEditing(false);
     dtrace("menu", "closeMenu");
   };
 
@@ -125,6 +131,23 @@ export default function Wisty() {
     setFontSizeInput(String(clamped));
     setFontSizeEditing(false);
     ddebug("font", "commitFontSizeInput", { raw: fontSizeInput(), clamped });
+  };
+
+  const adjustStatusBarFontSize = (delta) => {
+    const nextSize = Math.min(18, Math.max(8, statusBarFontSize() + delta));
+    setStatusBarFontSize(nextSize);
+    setStatusBarFontSizeInput(String(nextSize));
+    ddebug("font", "adjustStatusBarFontSize", { delta, nextSize });
+  };
+
+  const commitStatusBarFontSizeInput = () => {
+    const parsed = Number.parseInt(statusBarFontSizeInput(), 10);
+    const safeSize = Number.isNaN(parsed) ? statusBarFontSize() : parsed;
+    const clamped = Math.min(18, Math.max(8, safeSize));
+    setStatusBarFontSize(clamped);
+    setStatusBarFontSizeInput(String(clamped));
+    setStatusBarFontSizeEditing(false);
+    ddebug("font", "commitStatusBarFontSizeInput", { raw: statusBarFontSizeInput(), clamped });
   };
 
   const cycleFontStyle = () => {
@@ -194,6 +217,11 @@ export default function Wisty() {
     setTextFontClass,
     statusBarVisible,
     setStatusBarVisible,
+    statusBarStatsVisible,
+    setStatusBarStatsVisible,
+    statusBarFontSize,
+    setStatusBarFontSize,
+    setStatusBarFontSizeInput,
     textWrapEnabled,
     setTextWrapEnabled,
     themeMode,
@@ -293,6 +321,7 @@ export default function Wisty() {
   onMount(() => {
     initDebugLog();
     dinfo("startup", "onMount begin");
+    document.title = "wisty";
     const resolvedPlatform = platform();
     setPlatformName(resolvedPlatform);
     dinfo("startup", "platform resolved", { platform: resolvedPlatform });
@@ -301,6 +330,12 @@ export default function Wisty() {
       dinfo("startup", "version resolved", { version: resolvedVersion });
     }, (err) => {
       derror("startup", "version resolution failed", { error: String(err) });
+    });
+
+    void appWindow.title().then((nativeTitle) => {
+      dinfo("window", "native window initial title", { nativeTitle });
+    }, (err) => {
+      derror("window", "failed to read native initial title", { error: String(err) });
     });
 
     const handleKeyDown = (event) => {
@@ -501,16 +536,17 @@ export default function Wisty() {
   });
 
   createEffect(() => {
-    if (statusBarVisible()) {
-      updateStats();
+    if (statusBarFontSizeEditing() && statusBarFontSizeInputRef) {
+      statusBarFontSizeInputRef.focus();
+      statusBarFontSizeInputRef.select();
+      dtrace("font", "focus status bar font size input");
     }
   });
 
   createEffect(() => {
-    const title = fileName();
-    document.title = title;
-    void appWindow.setTitle(title);
-    dtrace("window", "title updated", { title });
+    if (statusBarVisible() && statusBarStatsVisible()) {
+      updateStats();
+    }
   });
 
   return (
@@ -545,6 +581,16 @@ export default function Wisty() {
         themeMode={themeMode}
         statusBarVisible={statusBarVisible}
         setStatusBarVisible={setStatusBarVisible}
+        statusBarStatsVisible={statusBarStatsVisible}
+        setStatusBarStatsVisible={setStatusBarStatsVisible}
+        statusBarFontSize={statusBarFontSize}
+        statusBarFontSizeEditing={statusBarFontSizeEditing}
+        setStatusBarFontSizeEditing={setStatusBarFontSizeEditing}
+        statusBarFontSizeInput={statusBarFontSizeInput}
+        setStatusBarFontSizeInput={setStatusBarFontSizeInput}
+        statusBarFontSizeInputRef={(el) => { statusBarFontSizeInputRef = el; }}
+        adjustStatusBarFontSize={adjustStatusBarFontSize}
+        commitStatusBarFontSizeInput={commitStatusBarFontSizeInput}
         setAboutOpen={setAboutOpen}
       />
 
@@ -552,7 +598,7 @@ export default function Wisty() {
         <div ref={(el) => editorApi.setEditorHost(el)} className="h-full w-full" />
       </div>
 
-      {statusBarVisible() ? <StatusBar statsText={statsText()} /> : null}
+      {statusBarVisible() ? <StatusBar filePath={currentFilePath() || "Untitled"} statsText={statsText()} showStats={statusBarStatsVisible()} fontSize={statusBarFontSize()} /> : null}
       <ConfirmDiscardDialog
         open={fileActions.confirmOpen()}
         closeReqId={activeCloseRequestId()}

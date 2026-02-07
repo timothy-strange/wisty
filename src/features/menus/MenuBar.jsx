@@ -22,7 +22,27 @@ const renderMenuLabel = (label, shortcutChar, menuAltActive) => {
 
 export default function MenuBar(props) {
   const menuOrder = ["file", "font", "settings", "app"];
+  const subMenuPanel = "absolute left-full top-0 w-max rounded border border-gray-200 bg-white shadow-md dark:border-gray-700 dark:bg-gray-800 flex flex-col z-50";
   const [activeItemIndex, setActiveItemIndex] = createSignal(0);
+  const [openSubmenu, setOpenSubmenu] = createSignal("");
+  const [activeSubItemIndex, setActiveSubItemIndex] = createSignal(0);
+
+  const statusBarSubmenuOpen = () => props.openMenu() === "settings" && openSubmenu() === "status-bar";
+
+  const closeStatusBarSubmenu = () => {
+    setOpenSubmenu("");
+    setActiveSubItemIndex(0);
+    props.setStatusBarFontSizeEditing(false);
+  };
+
+  const openStatusBarSubmenu = (source) => {
+    if (props.openMenu() !== "settings") {
+      return;
+    }
+    setOpenSubmenu("status-bar");
+    setActiveSubItemIndex(0);
+    ddebug("shortcut", "status-bar submenu opened", { source });
+  };
 
   const selectableItemsByMenu = createMemo(() => ({
     file: [
@@ -52,7 +72,7 @@ export default function MenuBar(props) {
       { id: "text-wrap", run: () => { props.setTextWrapEnabled(!props.textWrapEnabled()); props.closeMenu(); } },
       { id: "dark-mode", run: () => { props.applyThemeMode("dark"); props.closeMenu(); } },
       { id: "light-mode", run: () => { props.applyThemeMode("light"); props.closeMenu(); } },
-      { id: "status-bar", run: () => { props.setStatusBarVisible(!props.statusBarVisible()); props.closeMenu(); } }
+      { id: "status-bar-submenu", run: () => openStatusBarSubmenu("enter-parent") }
     ],
     app: [
       { id: "about", run: () => { props.setAboutOpen(true); props.closeMenu(); } }
@@ -71,6 +91,16 @@ export default function MenuBar(props) {
     return active ? `${menuRowTight} bg-gray-100 dark:bg-gray-700` : menuRowTight;
   };
 
+  const subItemClass = (index) => {
+    const active = statusBarSubmenuOpen() && activeSubItemIndex() === index;
+    return active ? `${menuItem} bg-gray-100 dark:bg-gray-700` : menuItem;
+  };
+
+  const subRowClass = (index) => {
+    const active = statusBarSubmenuOpen() && activeSubItemIndex() === index;
+    return active ? `${menuRowTight} bg-gray-100 dark:bg-gray-700` : menuRowTight;
+  };
+
   const isFontSizeRowSelected = () => {
     if (props.openMenu() !== "font") {
       return false;
@@ -80,7 +110,19 @@ export default function MenuBar(props) {
     return selected && selected.id === "font-size";
   };
 
+  const isStatusBarFontSizeSubRowSelected = () => statusBarSubmenuOpen() && activeSubItemIndex() === 2;
+
+  const toggleStatusBarFontSizeEdit = () => {
+    const nextEditing = !props.statusBarFontSizeEditing();
+    if (nextEditing) {
+      props.setStatusBarFontSizeInput(String(props.statusBarFontSize()));
+    }
+    props.setStatusBarFontSizeEditing(nextEditing);
+    ddebug("shortcut", "status-bar font-size edit toggled by enter", { editing: nextEditing });
+  };
+
   const moveMenuBy = (delta) => {
+    closeStatusBarSubmenu();
     const currentMenu = props.openMenu();
     if (!currentMenu) {
       return;
@@ -97,16 +139,47 @@ export default function MenuBar(props) {
   };
 
   const moveItemBy = (delta) => {
+    closeStatusBarSubmenu();
     const items = getSelectableItems();
     if (items.length === 0) {
       return;
     }
-    const nextIndex = (activeItemIndex() + delta + items.length) % items.length;
+    const from = activeItemIndex();
+    const nextIndex = (from + delta + items.length) % items.length;
     setActiveItemIndex(nextIndex);
-    ddebug("shortcut", "menu item moved by arrow", { menu: props.openMenu(), from: activeItemIndex(), to: nextIndex, delta });
+    ddebug("shortcut", "menu item moved by arrow", { menu: props.openMenu(), from, to: nextIndex, delta });
+  };
+
+  const moveSubItemBy = (delta) => {
+    const total = 3;
+    const from = activeSubItemIndex();
+    const nextIndex = (from + delta + total) % total;
+    setActiveSubItemIndex(nextIndex);
+    ddebug("shortcut", "status-bar submenu item moved by arrow", { from, to: nextIndex, delta });
+  };
+
+  const activateStatusBarSubmenuItem = () => {
+    const index = activeSubItemIndex();
+    if (index === 0) {
+      props.setStatusBarVisible(!props.statusBarVisible());
+      ddebug("shortcut", "status-bar enabled toggled", { enabled: !props.statusBarVisible() });
+      return;
+    }
+    if (index === 1) {
+      props.setStatusBarStatsVisible(!props.statusBarStatsVisible());
+      ddebug("shortcut", "status-bar show-stats toggled", { showStats: !props.statusBarStatsVisible() });
+      return;
+    }
+    if (index === 2) {
+      toggleStatusBarFontSizeEdit();
+    }
   };
 
   const activateSelectedItem = () => {
+    if (statusBarSubmenuOpen()) {
+      activateStatusBarSubmenuItem();
+      return;
+    }
     const items = getSelectableItems();
     if (items.length === 0) {
       return;
@@ -123,9 +196,13 @@ export default function MenuBar(props) {
   createEffect(() => {
     const currentMenu = props.openMenu();
     if (!currentMenu) {
+      closeStatusBarSubmenu();
       return;
     }
     setActiveItemIndex(0);
+    if (currentMenu !== "settings") {
+      closeStatusBarSubmenu();
+    }
   });
 
   onMount(() => {
@@ -133,7 +210,74 @@ export default function MenuBar(props) {
       if (!props.openMenu()) {
         return;
       }
+
+      if (statusBarSubmenuOpen() && props.statusBarFontSizeEditing()) {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          event.stopImmediatePropagation();
+          props.setStatusBarFontSizeInput(String(props.statusBarFontSize()));
+          props.setStatusBarFontSizeEditing(false);
+        }
+        return;
+      }
+
       if (props.fontSizeEditing && props.fontSizeEditing()) {
+        return;
+      }
+
+      if (event.key === "Escape" && statusBarSubmenuOpen()) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        closeStatusBarSubmenu();
+        setActiveItemIndex(3);
+        ddebug("shortcut", "status-bar submenu closed by escape");
+        return;
+      }
+
+      if (statusBarSubmenuOpen()) {
+        if (event.key === "ArrowUp") {
+          event.preventDefault();
+          event.stopPropagation();
+          event.stopImmediatePropagation();
+          moveSubItemBy(-1);
+          return;
+        }
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          event.stopPropagation();
+          event.stopImmediatePropagation();
+          moveSubItemBy(1);
+          return;
+        }
+        if (event.key === "ArrowLeft") {
+          event.preventDefault();
+          event.stopPropagation();
+          event.stopImmediatePropagation();
+          if (isStatusBarFontSizeSubRowSelected()) {
+            props.adjustStatusBarFontSize(-1);
+            return;
+          }
+          closeStatusBarSubmenu();
+          setActiveItemIndex(3);
+          return;
+        }
+        if (event.key === "ArrowRight") {
+          event.preventDefault();
+          event.stopPropagation();
+          event.stopImmediatePropagation();
+          if (isStatusBarFontSizeSubRowSelected()) {
+            props.adjustStatusBarFontSize(1);
+          }
+          return;
+        }
+        if (event.key === "Enter") {
+          event.preventDefault();
+          event.stopPropagation();
+          event.stopImmediatePropagation();
+          activateStatusBarSubmenuItem();
+        }
         return;
       }
 
@@ -149,10 +293,15 @@ export default function MenuBar(props) {
         moveMenuBy(-1);
         return;
       }
+
       if (event.key === "ArrowRight") {
         event.preventDefault();
         event.stopPropagation();
         event.stopImmediatePropagation();
+        if (props.openMenu() === "settings" && activeItemIndex() === 3) {
+          openStatusBarSubmenu("arrow-right");
+          return;
+        }
         if (isFontSizeRowSelected()) {
           props.adjustFontSize(1);
           ddebug("shortcut", "font-size adjusted by right arrow", { value: props.fontSize() });
@@ -161,6 +310,7 @@ export default function MenuBar(props) {
         moveMenuBy(1);
         return;
       }
+
       if (event.key === "ArrowUp") {
         event.preventDefault();
         event.stopPropagation();
@@ -168,6 +318,7 @@ export default function MenuBar(props) {
         moveItemBy(-1);
         return;
       }
+
       if (event.key === "ArrowDown") {
         event.preventDefault();
         event.stopPropagation();
@@ -175,6 +326,7 @@ export default function MenuBar(props) {
         moveItemBy(1);
         return;
       }
+
       if (event.key === "Enter") {
         event.preventDefault();
         event.stopPropagation();
@@ -196,26 +348,26 @@ export default function MenuBar(props) {
           <button className={menuButton} onClick={() => props.toggleMenu("file")} onMouseEnter={() => props.switchMenuOnHover("file")}>{renderMenuLabel("File", "F", props.menuAltActive())}</button>
           {props.openMenu() === "file" ?
             <div className={menuPanel}>
-                <button className={itemClass("file", 0)} onMouseEnter={() => setActiveItemIndex(0)} onClick={() => { props.openFile(); props.closeMenu(); }}>
-                  <span>Open</span>
-                  <span className={menuShortcut}>{shortcut(props.platformName(), "O")}</span>
-                </button>
-                <button className={itemClass("file", 1)} onMouseEnter={() => setActiveItemIndex(1)} onClick={() => { props.newFile(); props.closeMenu(); }}>
-                  <span>New</span>
-                  <span className={menuShortcut}>{shortcut(props.platformName(), "N")}</span>
-                </button>
-                <button className={itemClass("file", 2)} onMouseEnter={() => setActiveItemIndex(2)} onClick={() => { props.saveFile(); props.closeMenu(); }}>
-                  <span>Save</span>
-                  <span className={menuShortcut}>{shortcut(props.platformName(), "S")}</span>
-                </button>
-                <button className={itemClass("file", 3)} onMouseEnter={() => setActiveItemIndex(3)} onClick={() => { props.saveFileAs(); props.closeMenu(); }}>
-                  <span>Save As</span>
-                  <span className={menuShortcut}>{shortcut(props.platformName(), "S", true)}</span>
-                </button>
-                <button className={itemClass("file", 4)} onMouseEnter={() => setActiveItemIndex(4)} onClick={() => { props.closeApplication(); props.closeMenu(); }}>
-                  <span>Quit</span>
-                  <span className={menuShortcut}>{shortcut(props.platformName(), "Q")}</span>
-                </button>
+              <button className={itemClass("file", 0)} onMouseEnter={() => setActiveItemIndex(0)} onClick={() => { props.openFile(); props.closeMenu(); }}>
+                <span>Open</span>
+                <span className={menuShortcut}>{shortcut(props.platformName(), "O")}</span>
+              </button>
+              <button className={itemClass("file", 1)} onMouseEnter={() => setActiveItemIndex(1)} onClick={() => { props.newFile(); props.closeMenu(); }}>
+                <span>New</span>
+                <span className={menuShortcut}>{shortcut(props.platformName(), "N")}</span>
+              </button>
+              <button className={itemClass("file", 2)} onMouseEnter={() => setActiveItemIndex(2)} onClick={() => { props.saveFile(); props.closeMenu(); }}>
+                <span>Save</span>
+                <span className={menuShortcut}>{shortcut(props.platformName(), "S")}</span>
+              </button>
+              <button className={itemClass("file", 3)} onMouseEnter={() => setActiveItemIndex(3)} onClick={() => { props.saveFileAs(); props.closeMenu(); }}>
+                <span>Save As</span>
+                <span className={menuShortcut}>{shortcut(props.platformName(), "S", true)}</span>
+              </button>
+              <button className={itemClass("file", 4)} onMouseEnter={() => setActiveItemIndex(4)} onClick={() => { props.closeApplication(); props.closeMenu(); }}>
+                <span>Quit</span>
+                <span className={menuShortcut}>{shortcut(props.platformName(), "Q")}</span>
+              </button>
             </div>
             : null}
         </div>
@@ -224,18 +376,18 @@ export default function MenuBar(props) {
           <button className={menuButton} onClick={() => props.toggleMenu("font")} onMouseEnter={() => props.switchMenuOnHover("font")}>{renderMenuLabel("Font", "O", props.menuAltActive())}</button>
           {props.openMenu() === "font" ?
             <div className={menuPanel}>
-                <button className={itemClass("font", 0)} onMouseEnter={() => setActiveItemIndex(0)} onClick={() => { props.setTextFontClass("font-sans"); props.closeMenu(); }}>
-                  <span>Sans{props.textFontClass() === "font-sans" ? " ✓" : ""}</span>
-                  <span className={menuShortcut}>{shortcut(props.platformName(), "B")}</span>
-                </button>
-                <button className={itemClass("font", 1)} onMouseEnter={() => setActiveItemIndex(1)} onClick={() => { props.setTextFontClass("font-serif"); props.closeMenu(); }}>
-                  <span>Serif{props.textFontClass() === "font-serif" ? " ✓" : ""}</span>
-                  <span className={menuShortcut}>{shortcut(props.platformName(), "B")}</span>
-                </button>
-                <button className={itemClass("font", 2)} onMouseEnter={() => setActiveItemIndex(2)} onClick={() => { props.setTextFontClass("font-mono"); props.closeMenu(); }}>
-                  <span>Mono{props.textFontClass() === "font-mono" ? " ✓" : ""}</span>
-                  <span className={menuShortcut}>{shortcut(props.platformName(), "B")}</span>
-                </button>
+              <button className={itemClass("font", 0)} onMouseEnter={() => setActiveItemIndex(0)} onClick={() => { props.setTextFontClass("font-sans"); props.closeMenu(); }}>
+                <span>Sans{props.textFontClass() === "font-sans" ? " ✓" : ""}</span>
+                <span className={menuShortcut}>{shortcut(props.platformName(), "B")}</span>
+              </button>
+              <button className={itemClass("font", 1)} onMouseEnter={() => setActiveItemIndex(1)} onClick={() => { props.setTextFontClass("font-serif"); props.closeMenu(); }}>
+                <span>Serif{props.textFontClass() === "font-serif" ? " ✓" : ""}</span>
+                <span className={menuShortcut}>{shortcut(props.platformName(), "B")}</span>
+              </button>
+              <button className={itemClass("font", 2)} onMouseEnter={() => setActiveItemIndex(2)} onClick={() => { props.setTextFontClass("font-mono"); props.closeMenu(); }}>
+                <span>Mono{props.textFontClass() === "font-mono" ? " ✓" : ""}</span>
+                <span className={menuShortcut}>{shortcut(props.platformName(), "B")}</span>
+              </button>
               <div className={rowClass("font", 3)} onMouseEnter={() => setActiveItemIndex(3)}>
                 <button className={menuArrow} onClick={() => props.adjustFontSize(-1)} aria-label="Decrease font size">
                   <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -286,22 +438,88 @@ export default function MenuBar(props) {
           <button className={menuButton} onClick={() => props.toggleMenu("settings")} onMouseEnter={() => props.switchMenuOnHover("settings")}>{renderMenuLabel("Settings", "S", props.menuAltActive())}</button>
           {props.openMenu() === "settings" ?
             <div className={menuPanel}>
-                <button className={itemClass("settings", 0)} onMouseEnter={() => setActiveItemIndex(0)} onClick={() => { props.setTextWrapEnabled(!props.textWrapEnabled()); props.closeMenu(); }}>
-                  <span>Text Wrap{props.textWrapEnabled() ? " ✓" : ""}</span>
-                  <span className={menuShortcut}>{shortcut(props.platformName(), "J")}</span>
+              <button className={itemClass("settings", 0)} onMouseEnter={() => { setActiveItemIndex(0); closeStatusBarSubmenu(); }} onClick={() => { props.setTextWrapEnabled(!props.textWrapEnabled()); props.closeMenu(); }}>
+                <span>Text Wrap{props.textWrapEnabled() ? " ✓" : ""}</span>
+                <span className={menuShortcut}>{shortcut(props.platformName(), "J")}</span>
+              </button>
+              <button className={itemClass("settings", 1)} onMouseEnter={() => { setActiveItemIndex(1); closeStatusBarSubmenu(); }} onClick={() => { props.applyThemeMode("dark"); props.closeMenu(); }}>
+                <span>Dark Mode{props.themeMode() === "dark" ? " ✓" : ""}</span>
+                <span className={menuShortcut}>{shortcut(props.platformName(), "M")}</span>
+              </button>
+              <button className={itemClass("settings", 2)} onMouseEnter={() => { setActiveItemIndex(2); closeStatusBarSubmenu(); }} onClick={() => { props.applyThemeMode("light"); props.closeMenu(); }}>
+                <span>Light Mode{props.themeMode() === "light" ? " ✓" : ""}</span>
+                <span className={menuShortcut}>{shortcut(props.platformName(), "M")}</span>
+              </button>
+
+              <div className="relative">
+                <button
+                  className={itemClass("settings", 3)}
+                  onMouseEnter={() => { setActiveItemIndex(3); openStatusBarSubmenu("hover-parent"); }}
+                  onClick={() => openStatusBarSubmenu("click-parent")}
+                >
+                  <span>Status Bar</span>
+                  <span className={`${menuArrow} pointer-events-none`} aria-hidden="true">
+                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                  </span>
                 </button>
-                <button className={itemClass("settings", 1)} onMouseEnter={() => setActiveItemIndex(1)} onClick={() => { props.applyThemeMode("dark"); props.closeMenu(); }}>
-                  <span>Dark Mode{props.themeMode() === "dark" ? " ✓" : ""}</span>
-                  <span className={menuShortcut}>{shortcut(props.platformName(), "M")}</span>
-                </button>
-                <button className={itemClass("settings", 2)} onMouseEnter={() => setActiveItemIndex(2)} onClick={() => { props.applyThemeMode("light"); props.closeMenu(); }}>
-                  <span>Light Mode{props.themeMode() === "light" ? " ✓" : ""}</span>
-                  <span className={menuShortcut}>{shortcut(props.platformName(), "M")}</span>
-                </button>
-                <button className={itemClass("settings", 3)} onMouseEnter={() => setActiveItemIndex(3)} onClick={() => { props.setStatusBarVisible(!props.statusBarVisible()); props.closeMenu(); }}>
-                  <span>Status Bar{props.statusBarVisible() ? " ✓" : ""}</span>
-                  <span className={menuShortcut}>{shortcut(props.platformName(), "U")}</span>
-                </button>
+                {statusBarSubmenuOpen() ?
+                  <div className={subMenuPanel} onMouseEnter={() => openStatusBarSubmenu("hover-submenu")}>
+                    <button className={subItemClass(0)} onMouseEnter={() => { setActiveSubItemIndex(0); props.setStatusBarFontSizeEditing(false); }} onClick={() => props.setStatusBarVisible(!props.statusBarVisible())}>
+                      <span>Enabled{props.statusBarVisible() ? " ✓" : ""}</span>
+                    </button>
+                    <button className={subItemClass(1)} onMouseEnter={() => { setActiveSubItemIndex(1); props.setStatusBarFontSizeEditing(false); }} onClick={() => props.setStatusBarStatsVisible(!props.statusBarStatsVisible())}>
+                      <span>Show stats{props.statusBarStatsVisible() ? " ✓" : ""}</span>
+                    </button>
+                    <div className={subRowClass(2)} onMouseEnter={() => setActiveSubItemIndex(2)}>
+                      <span className="text-sm text-gray-700 dark:text-gray-200">Font</span>
+                      <div className="flex items-center gap-2">
+                        <button className={menuArrow} onClick={() => props.adjustStatusBarFontSize(-1)} aria-label="Decrease status bar font size">
+                          <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="15 18 9 12 15 6" />
+                          </svg>
+                        </button>
+                        {props.statusBarFontSizeEditing() ?
+                          <input
+                            className="w-12 rounded border border-gray-200 bg-white px-1 text-center text-sm text-gray-900 outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                            type="text"
+                            inputMode="numeric"
+                            ref={props.statusBarFontSizeInputRef}
+                            value={props.statusBarFontSizeInput()}
+                            onInput={(event) => props.setStatusBarFontSizeInput(event.currentTarget.value)}
+                            onBlur={props.commitStatusBarFontSizeInput}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                props.commitStatusBarFontSizeInput();
+                              } else if (event.key === "Escape") {
+                                event.preventDefault();
+                                props.setStatusBarFontSizeInput(String(props.statusBarFontSize()));
+                                props.setStatusBarFontSizeEditing(false);
+                              }
+                            }}
+                            aria-label="Status bar font size"
+                          />
+                          :
+                          <button
+                            className="w-12 text-center text-sm text-gray-700 hover:text-gray-900 dark:text-gray-200 dark:hover:text-white"
+                            onClick={() => toggleStatusBarFontSizeEdit()}
+                            aria-label="Edit status bar font size"
+                          >
+                            {props.statusBarFontSize()} px
+                          </button>
+                        }
+                        <button className={menuArrow} onClick={() => props.adjustStatusBarFontSize(1)} aria-label="Increase status bar font size">
+                          <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="9 18 15 12 9 6" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  : null}
+              </div>
             </div>
             : null}
         </div>
@@ -310,10 +528,10 @@ export default function MenuBar(props) {
           <button className={menuButton} onClick={() => props.toggleMenu("app")} onMouseEnter={() => props.switchMenuOnHover("app")}>{renderMenuLabel("App", "A", props.menuAltActive())}</button>
           {props.openMenu() === "app" ?
             <div className={menuPanel}>
-                <button className={itemClass("app", 0)} onMouseEnter={() => setActiveItemIndex(0)} onClick={() => { props.setAboutOpen(true); props.closeMenu(); }}>
-                  <span>About</span>
-                  <span className={menuShortcut}>F1</span>
-                </button>
+              <button className={itemClass("app", 0)} onMouseEnter={() => setActiveItemIndex(0)} onClick={() => { props.setAboutOpen(true); props.closeMenu(); }}>
+                <span>About</span>
+                <span className={menuShortcut}>F1</span>
+              </button>
             </div>
             : null}
         </div>
