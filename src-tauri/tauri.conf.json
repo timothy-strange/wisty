@@ -43,18 +43,19 @@
   "productName": "wisty",
   "mainBinaryName": "wisty",
   "version": "1.0.0",
-  "identifier": "timothy-strange.wisty",
+  "identifier": "wisty-ts",
   "plugins": {},
   "app": {
     "windows": [
       {
         "fullscreen": false,
-        "height": 760,
-        "minHeight": 120,
+        "height": 650,
+        "minHeight": 240,
         "minWidth": 400,
         "resizable": true,
         "title": "wisty",
-        "width": 580,
+        "width": 800,
+        "center": true,
         "decorations": true,
         "transparent": false,
         "useHttpsScheme": true

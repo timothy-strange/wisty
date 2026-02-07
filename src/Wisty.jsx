@@ -6,6 +6,7 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { open as openInDefault } from '@tauri-apps/plugin-shell';
 import { type } from "@tauri-apps/plugin-os";
 import { getVersion } from "@tauri-apps/api/app"
+import { dirname } from "@tauri-apps/api/path";
 import { Store } from "@tauri-apps/plugin-store";
 const appWindow = getCurrentWindow()
 
@@ -13,18 +14,6 @@ const [platformName, setPlatformName] = createSignal("");
 const [version, setVersion] = createSignal("");
 setPlatformName(type());
 getVersion().then(setVersion);
-
-if (window.matchMedia('(prefers-color-scheme: dark)').matches === true) {
-  document.querySelector("html").classList.add("dark");
-}
-
-window.matchMedia('(prefers-color-scheme: dark)').addEventListener("change", event => {
-  if (event.matches) {
-    document.querySelector("html").classList.add("dark");
-  } else {
-    document.querySelector("html").classList.remove("dark");
-  }
-})
 
 export default function Wisty() {
   const [startingState, setStartingState] = createSignal("");
@@ -35,12 +24,14 @@ export default function Wisty() {
   const [fontSize, setFontSize] = createSignal(14);
   const [fontSizeEditing, setFontSizeEditing] = createSignal(false);
   const [fontSizeInput, setFontSizeInput] = createSignal("14");
+  const [themeMode, setThemeMode] = createSignal("light");
   const [statusBarVisible, setStatusBarVisible] = createSignal(true);
   const [openMenu, setOpenMenu] = createSignal("");
   const [aboutOpen, setAboutOpen] = createSignal(false);
   const [fileName, setFileName] = createSignal("Untitled");
   const [statsText, setStatsText] = createSignal("0 Words, 0 Chars");
   const [storeReady, setStoreReady] = createSignal(false);
+  const [lastDirectory, setLastDirectory] = createSignal("");
 
   const minimalButton = "disabled:pointer-events-none disabled:opacity-50 rounded px-2 py-0.5 text-sm ring-1 duration-[50ms] hover:shadow select-none w-fit h-fit bg-transparent text-black ring-transparent hover:ring-gray-200 hover:bg-gray-100 active:bg-gray-200 active:ring-gray-200 dark:text-white dark:hover:ring-gray-700 dark:hover:bg-gray-800 dark:active:bg-gray-700 dark:active:ring-gray-700";
   const colouredButton = colour => `disabled:pointer-events-none disabled:opacity-50 rounded px-2 py-0.5 text-sm ring-1 duration-[50ms] hover:shadow select-none w-fit h-fit bg-${colour}-500 text-white ring-${colour}-600 hover:shadow-${colour}-600 active:bg-${colour}-600 dark:bg-${colour}-700 dark:ring-${colour}-600 dark:hover:shadow-${colour}-600 dark:active:bg-${colour}-600`;
@@ -48,39 +39,67 @@ export default function Wisty() {
 
   const headerTextColour = "!text-gray-700 dark:!text-gray-300 select-none truncate";
   const menuButton = "rounded px-2 py-1 text-sm font-normal select-none text-black hover:bg-gray-200 dark:text-white dark:hover:bg-gray-700";
-  const menuItem = "w-full text-left px-3 py-1.5 text-sm text-black hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700";
-  const menuRowTight = "flex w-full items-center gap-1 px-2.5 py-1.5 text-sm text-black dark:text-white";
+  const menuItem = "w-full text-left px-3 py-1.5 text-sm text-black hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700 flex items-center justify-between gap-6";
+  const menuRowTight = "flex w-full items-center justify-between gap-2 px-2.5 py-1.5 text-sm text-black dark:text-white";
   const menuArrow = "flex h-6 w-6 items-center justify-center rounded bg-gray-200/80 text-gray-700 hover:bg-gray-300 active:bg-gray-400 focus:outline-none focus:ring-0 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 dark:active:bg-gray-500";
   const menuPanel = "absolute left-0 top-full mt-0 w-max rounded border border-gray-200 bg-white shadow-md dark:border-gray-700 dark:bg-gray-800 flex flex-col z-50";
+  const menuShortcut = "text-sm text-gray-400 dark:text-gray-500";
 
   let textEditor;
   let menuBar;
   let fontSizeInputRef;
   let settingsStore;
+  let unlistenClose;
   function calculateStats() {
     var words = textEditor.value.trim().replace("\n", " ").split(/(\s+)/).filter((word) => word.trim().length > 0).length;
     var characters = textEditor.value.replace("\n", "").replace(" ", "").length;
     setStatsText(`${words} Words, ${characters} Characters`);
 
     setTextEdited(!(textEditor.value === startingState()));
-
-    console.log(textEdited())
   }
   
   const getFileNameFromPath = (filePath) => filePath.replace(/^.*(\\|\/|\:)/, "");
 
-  const discardQuery = (good, badToastMessage) => {
-    askDialog("Would you like to discard your work?").then((yes) => {
-      if (yes) {
-        good();
-      } else {
-        message(badToastMessage);
+  const confirmDiscard = async () => askDialog("You have unsaved changes", {
+    title: "Warning",
+    okLabel: "Discard",
+    cancelLabel: "Cancel",
+  });
+
+  const discardQuery = async (good) => {
+    const shouldDiscard = await confirmDiscard();
+    if (shouldDiscard) {
+      await good();
+    }
+  }
+
+  const cleanupCloseListener = () => {
+    if (unlistenClose) {
+      unlistenClose();
+      unlistenClose = null;
+    }
+  }
+
+
+
+  const recordLastDirectory = async (filePath) => {
+    if (!filePath) {
+      return;
+    }
+    try {
+      const directory = await dirname(filePath);
+      setLastDirectory(directory);
+      if (settingsStore) {
+        await settingsStore.set("lastDirectory", directory);
+        await settingsStore.save();
       }
-    })
+    } catch {
+      // ignore directory lookup failures
+    }
   }
 
   const saveFileAs = () => {
-    return saveDialog().then((filePath) => {
+    return saveDialog({ defaultPath: lastDirectory() || undefined }).then((filePath) => {
       if (!filePath) {
         return;
       }
@@ -90,6 +109,7 @@ export default function Wisty() {
           setCurrentFilePath(filePath);
           setTextEdited(false);
           setStartingState(textEditor.value);
+          void recordLastDirectory(filePath);
         },
         () => message("Error while saving, please try again."));
     }, 
@@ -103,6 +123,7 @@ export default function Wisty() {
           () => {
             setTextEdited(false);
             setStartingState(textEditor.value);
+            void recordLastDirectory(currentFilePath());
             success();
           },
           () => {
@@ -129,21 +150,23 @@ export default function Wisty() {
     if (textEdited() === false) {
       clear();
     } else {
-      discardQuery(clear, "To create a new file please save or discard your work.");
+      void discardQuery(clear);
     }
   }
 
   const open = () => {
-    clear(); // Clear all
-    return openDialog().then((filePath) => {
-      if (!filePath) {
+    return openDialog({ defaultPath: lastDirectory() || undefined }).then((filePath) => {
+      const resolvedPath = Array.isArray(filePath) ? filePath[0] : filePath;
+      if (!resolvedPath) {
         return;
       }
-      readTextFile(filePath).then((text) => {
+      clear();
+      readTextFile(resolvedPath).then((text) => {
         setStartingState(text);
         textEditor.value = text;
-        setCurrentFilePath(filePath);
-        setFileName(getFileNameFromPath(filePath));
+        setCurrentFilePath(resolvedPath);
+        setFileName(getFileNameFromPath(resolvedPath));
+        void recordLastDirectory(resolvedPath);
         calculateStats(); // Update words and characters (It should be 0, however its best to run the function)
       }, () => message("Error while opening file, please try again."));
     }, 
@@ -154,16 +177,12 @@ export default function Wisty() {
     if (textEdited() === false) {
       open();
     } else {
-      discardQuery(open, "To open a new file please save or discard your work.");
+      void discardQuery(open);
     }
   }
 
   const closeApplication = () => {
-    if (textEdited() === false) {
-      appWindow.close();
-    } else {
-      discardQuery(() => appWindow.close(), "To close please save or discard your work.");
-    }
+    appWindow.close();
   }
 
   const toggleMenu = (menuName) => {
@@ -206,22 +225,122 @@ export default function Wisty() {
     }
   }
 
+  const applyThemeMode = (mode) => {
+    const root = document.querySelector("html");
+    if (!root) {
+      return;
+    }
+    if (mode === "dark") {
+      root.classList.add("dark");
+    } else {
+      root.classList.remove("dark");
+    }
+    setThemeMode(mode);
+  }
+
+  const cycleFontStyle = () => {
+    const current = textFontClass();
+    if (current === "font-sans") {
+      setTextFontClass("font-serif");
+      return;
+    }
+    if (current === "font-serif") {
+      setTextFontClass("font-mono");
+      return;
+    }
+    setTextFontClass("font-sans");
+  }
+
   onMount(() => {
     const handleKeyDown = (event) => {
       if (event.key === "Escape" && aboutOpen()) {
         setAboutOpen(false);
+        return;
+      }
+      const key = event.key.toLowerCase();
+      if (event.ctrlKey && key === "n") {
+        event.preventDefault();
+        newFile();
+        return;
+      }
+      if (event.ctrlKey && key === "o") {
+        event.preventDefault();
+        openFile();
+        return;
+      }
+      if (event.ctrlKey && !event.shiftKey && key === "s") {
+        event.preventDefault();
+        void saveFile();
+        return;
+      }
+      if (event.ctrlKey && event.shiftKey && key === "s") {
+        event.preventDefault();
+        void saveFileAs();
+        return;
+      }
+      if (event.ctrlKey && key === "q") {
+        event.preventDefault();
+        closeApplication();
+        return;
+      }
+      if (event.ctrlKey && key === "b") {
+        event.preventDefault();
+        cycleFontStyle();
+        return;
+      }
+      if (event.ctrlKey && key === "m") {
+        event.preventDefault();
+        applyThemeMode(themeMode() === "dark" ? "light" : "dark");
+        return;
+      }
+      if (event.ctrlKey && key === "j") {
+        event.preventDefault();
+        setTextWrapEnabled(!textWrapEnabled());
+        return;
+      }
+      if (event.ctrlKey && key === "u") {
+        event.preventDefault();
+        setStatusBarVisible(!statusBarVisible());
+        return;
+      }
+      if (event.key === "F1") {
+        event.preventDefault();
+        setAboutOpen(true);
+        return;
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
-
     const initStore = async () => {
-      settingsStore = new Store("settings.json");
+      settingsStore = await Store.load("settings.json");
       try {
         const storedFontSize = await settingsStore.get("fontSize");
+        const storedFontClass = await settingsStore.get("fontFamily");
+        const storedStatusBar = await settingsStore.get("statusBarVisible");
+        const storedTextWrap = await settingsStore.get("textWrapEnabled");
+        const storedThemeMode = await settingsStore.get("themeMode");
+        const storedLastDirectory = await settingsStore.get("lastDirectory");
         if (typeof storedFontSize === "number" && Number.isFinite(storedFontSize)) {
           setFontSize(storedFontSize);
           setFontSizeInput(String(storedFontSize));
+        }
+        if (typeof storedFontClass === "string") {
+          setTextFontClass(storedFontClass);
+        }
+        if (typeof storedStatusBar === "boolean") {
+          setStatusBarVisible(storedStatusBar);
+        }
+        if (typeof storedTextWrap === "boolean") {
+          setTextWrapEnabled(storedTextWrap);
+        }
+        if (storedThemeMode === "dark" || storedThemeMode === "light") {
+          applyThemeMode(storedThemeMode);
+        } else {
+          const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          applyThemeMode(prefersDark ? "dark" : "light");
+        }
+        if (typeof storedLastDirectory === "string") {
+          setLastDirectory(storedLastDirectory);
         }
       } catch {
         // ignore store read failures
@@ -230,7 +349,29 @@ export default function Wisty() {
     };
     void initStore();
 
-    onCleanup(() => window.removeEventListener("keydown", handleKeyDown));
+    setTimeout(() => {
+      if (textEditor) {
+        textEditor.focus();
+      }
+    }, 0);
+
+    const setupCloseListener = async () => {
+      unlistenClose = await appWindow.onCloseRequested(async (event) => {
+        if (!textEdited()) {
+          return;
+        }
+        const shouldDiscard = await confirmDiscard();
+        if (!shouldDiscard) {
+          event.preventDefault();
+        }
+      });
+    };
+    void setupCloseListener();
+
+    onCleanup(() => {
+      window.removeEventListener("keydown", handleKeyDown);
+      cleanupCloseListener();
+    });
   });
 
   createEffect(() => {
@@ -248,6 +389,38 @@ export default function Wisty() {
     void settingsStore.save();
   });
 
+  createEffect(() => {
+    if (!storeReady() || !settingsStore) {
+      return;
+    }
+    void settingsStore.set("fontFamily", textFontClass());
+    void settingsStore.save();
+  });
+
+  createEffect(() => {
+    if (!storeReady() || !settingsStore) {
+      return;
+    }
+    void settingsStore.set("statusBarVisible", statusBarVisible());
+    void settingsStore.save();
+  });
+
+  createEffect(() => {
+    if (!storeReady() || !settingsStore) {
+      return;
+    }
+    void settingsStore.set("textWrapEnabled", textWrapEnabled());
+    void settingsStore.save();
+  });
+
+  createEffect(() => {
+    if (!storeReady() || !settingsStore) {
+      return;
+    }
+    void settingsStore.set("themeMode", themeMode());
+    void settingsStore.save();
+  });
+
   return (
     <div class="relative flex flex-col flex-grow h-full border border-gray-200 dark:border-gray-700" onClick={closeMenu}>
       <div className="flex flex-row items-center h-9 px-2 border-b border-gray-200 dark:border-gray-700 bg-gray-100/70 dark:bg-gray-800/70" onClick={(event) => event.stopPropagation()}>
@@ -256,10 +429,26 @@ export default function Wisty() {
             <button className={menuButton} onClick={() => toggleMenu("file")} onMouseEnter={() => switchMenuOnHover("file")}>File</button>
             {openMenu() === "file" ?
               <div className={menuPanel}>
-                <button className={menuItem} onClick={() => { openFile(); closeMenu(); }}>Open</button>
-                <button className={menuItem} onClick={() => { newFile(); closeMenu(); }}>New</button>
-                <button className={menuItem} onClick={() => { saveFile(); closeMenu(); }}>Save</button>
-                <button className={menuItem} onClick={() => { saveFileAs(); closeMenu(); }}>Save As</button>
+                <button className={menuItem} onClick={() => { openFile(); closeMenu(); }}>
+                  <span>Open</span>
+                  <span className={menuShortcut}>Ctrl+O</span>
+                </button>
+                <button className={menuItem} onClick={() => { newFile(); closeMenu(); }}>
+                  <span>New</span>
+                  <span className={menuShortcut}>Ctrl+N</span>
+                </button>
+                <button className={menuItem} onClick={() => { saveFile(); closeMenu(); }}>
+                  <span>Save</span>
+                  <span className={menuShortcut}>Ctrl+S</span>
+                </button>
+                <button className={menuItem} onClick={() => { saveFileAs(); closeMenu(); }}>
+                  <span>Save As</span>
+                  <span className={menuShortcut}>Ctrl+Shift+S</span>
+                </button>
+                <button className={menuItem} onClick={() => { closeApplication(); closeMenu(); }}>
+                  <span>Quit</span>
+                  <span className={menuShortcut}>Ctrl+Q</span>
+                </button>
               </div>
             : null}
           </div>
@@ -268,9 +457,18 @@ export default function Wisty() {
             <button className={menuButton} onClick={() => toggleMenu("font")} onMouseEnter={() => switchMenuOnHover("font")}>Font</button>
             {openMenu() === "font" ?
               <div className={menuPanel}>
-                <button className={menuItem} onClick={() => { setTextFontClass("font-sans"); closeMenu(); }}>Sans</button>
-                <button className={menuItem} onClick={() => { setTextFontClass("font-serif"); closeMenu(); }}>Serif</button>
-                <button className={menuItem} onClick={() => { setTextFontClass("font-mono"); closeMenu(); }}>Mono</button>
+                <button className={menuItem} onClick={() => { setTextFontClass("font-sans"); closeMenu(); }}>
+                  <span>Sans{textFontClass() === "font-sans" ? " ✓" : ""}</span>
+                  <span className={menuShortcut}>Ctrl+B</span>
+                </button>
+                <button className={menuItem} onClick={() => { setTextFontClass("font-serif"); closeMenu(); }}>
+                  <span>Serif{textFontClass() === "font-serif" ? " ✓" : ""}</span>
+                  <span className={menuShortcut}>Ctrl+B</span>
+                </button>
+                <button className={menuItem} onClick={() => { setTextFontClass("font-mono"); closeMenu(); }}>
+                  <span>Mono{textFontClass() === "font-mono" ? " ✓" : ""}</span>
+                  <span className={menuShortcut}>Ctrl+B</span>
+                </button>
                 <div className={menuRowTight}>
                   <button className={menuArrow} onClick={() => adjustFontSize(-1)} aria-label="Decrease font size">
                     <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -279,7 +477,7 @@ export default function Wisty() {
                   </button>
                   {fontSizeEditing() ?
                     <input
-                      className="min-w-[44px] max-w-[56px] rounded border border-gray-200 bg-white px-1 text-center text-sm text-gray-900 outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                      className="min-w-[44px] flex-1 rounded border border-gray-200 bg-white px-1 text-center text-sm text-gray-900 outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
                       type="text"
                       inputMode="numeric"
                       ref={fontSizeInputRef}
@@ -299,7 +497,7 @@ export default function Wisty() {
                     />
                   :
                     <button
-                      className="min-w-[44px] text-center text-sm text-gray-700 hover:text-gray-900 dark:text-gray-200 dark:hover:text-white"
+                      className="min-w-[44px] flex-1 text-center text-sm text-gray-700 hover:text-gray-900 dark:text-gray-200 dark:hover:text-white"
                       onClick={() => setFontSizeEditing(true)}
                       aria-label="Edit font size"
                     >
@@ -320,10 +518,22 @@ export default function Wisty() {
             <button className={menuButton} onClick={() => toggleMenu("settings")} onMouseEnter={() => switchMenuOnHover("settings")}>Settings</button>
             {openMenu() === "settings" ?
               <div className={menuPanel}>
-                <button className={menuItem} onClick={() => { setTextWrapEnabled(!textWrapEnabled()); closeMenu(); }}>{textWrapEnabled() ? "Disable" : "Enable"} Text Wrap</button>
-                <button className={menuItem} onClick={() => { document.querySelector("html").classList.add("dark"); closeMenu(); }}>Dark Mode</button>
-                <button className={menuItem} onClick={() => { document.querySelector("html").classList.remove("dark"); closeMenu(); }}>Light Mode</button>
-                <button className={menuItem} onClick={() => { setStatusBarVisible(!statusBarVisible()); closeMenu(); }}>{statusBarVisible() ? "Hide" : "Show"} Status Bar</button>
+                <button className={menuItem} onClick={() => { setTextWrapEnabled(!textWrapEnabled()); closeMenu(); }}>
+                  <span>Text Wrap{textWrapEnabled() ? " ✓" : ""}</span>
+                  <span className={menuShortcut}>Ctrl+J</span>
+                </button>
+                <button className={menuItem} onClick={() => { applyThemeMode("dark"); closeMenu(); }}>
+                  <span>Dark Mode{themeMode() === "dark" ? " ✓" : ""}</span>
+                  <span className={menuShortcut}>Ctrl+M</span>
+                </button>
+                <button className={menuItem} onClick={() => { applyThemeMode("light"); closeMenu(); }}>
+                  <span>Light Mode{themeMode() === "light" ? " ✓" : ""}</span>
+                  <span className={menuShortcut}>Ctrl+M</span>
+                </button>
+                <button className={menuItem} onClick={() => { setStatusBarVisible(!statusBarVisible()); closeMenu(); }}>
+                  <span>Status Bar{statusBarVisible() ? " ✓" : ""}</span>
+                  <span className={menuShortcut}>Ctrl+U</span>
+                </button>
               </div>
             : null}
           </div>
@@ -332,7 +542,10 @@ export default function Wisty() {
             <button className={menuButton} onClick={() => toggleMenu("app")} onMouseEnter={() => switchMenuOnHover("app")}>App</button>
             {openMenu() === "app" ?
               <div className={menuPanel}>
-                <button className={menuItem} onClick={() => { setAboutOpen(true); closeMenu(); }}>About</button>
+                <button className={menuItem} onClick={() => { setAboutOpen(true); closeMenu(); }}>
+                  <span>About</span>
+                  <span className={menuShortcut}>F1</span>
+                </button>
               </div>
             : null}
           </div>
