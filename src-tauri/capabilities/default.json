@@ -5,6 +5,27 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "core:window:allow-close",
+    "core:window:allow-destroy",
+    {
+      "identifier": "fs:allow-read-file",
+      "allow": [
+        {
+          "path": "**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-write-file",
+      "allow": [
+        {
+          "path": "**"
+        }
+      ]
+    },
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "dialog:allow-message",
     "opener:default"
   ]
 }
