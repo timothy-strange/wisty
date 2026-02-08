@@ -28,20 +28,34 @@ export default function MenuBar(props) {
   const [activeSubItemIndex, setActiveSubItemIndex] = createSignal(0);
 
   const statusBarSubmenuOpen = () => props.openMenu() === "settings" && openSubmenu() === "status-bar";
+  const findReplaceSubmenuOpen = () => props.openMenu() === "settings" && openSubmenu() === "find-replace";
+  const anySettingsSubmenuOpen = () => statusBarSubmenuOpen() || findReplaceSubmenuOpen();
 
-  const closeStatusBarSubmenu = () => {
+  const closeSettingsSubmenu = () => {
     setOpenSubmenu("");
     setActiveSubItemIndex(0);
     props.setStatusBarFontSizeEditing(false);
+    props.setFindReplaceFontSizeEditing(false);
   };
 
   const openStatusBarSubmenu = (source) => {
     if (props.openMenu() !== "settings") {
       return;
     }
+    props.setFindReplaceFontSizeEditing(false);
     setOpenSubmenu("status-bar");
     setActiveSubItemIndex(0);
     ddebug("shortcut", "status-bar submenu opened", { source });
+  };
+
+  const openFindReplaceSubmenu = (source) => {
+    if (props.openMenu() !== "settings") {
+      return;
+    }
+    props.setStatusBarFontSizeEditing(false);
+    setOpenSubmenu("find-replace");
+    setActiveSubItemIndex(0);
+    ddebug("shortcut", "find-replace submenu opened", { source });
   };
 
   const selectableItemsByMenu = createMemo(() => ({
@@ -83,6 +97,7 @@ export default function MenuBar(props) {
       { id: "light-mode", run: () => { props.applyThemeMode("light"); props.closeMenu(); } },
       { id: "highlight-matches", run: () => { props.setHighlightSelectionMatchesEnabled(!props.highlightSelectionMatchesEnabled()); props.closeMenu(); } },
       { id: "highlight-current-line", run: () => { props.setHighlightCurrentLineEnabled(!props.highlightCurrentLineEnabled()); props.closeMenu(); } },
+      { id: "find-replace-submenu", run: () => openFindReplaceSubmenu("enter-parent") },
       { id: "status-bar-submenu", run: () => openStatusBarSubmenu("enter-parent") }
     ],
     app: [
@@ -108,7 +123,7 @@ export default function MenuBar(props) {
   };
 
   const subRowClass = (index) => {
-    const active = statusBarSubmenuOpen() && activeSubItemIndex() === index;
+    const active = anySettingsSubmenuOpen() && activeSubItemIndex() === index;
     return active ? `${menuRowTight} bg-gray-100 dark:bg-gray-700` : menuRowTight;
   };
 
@@ -122,6 +137,7 @@ export default function MenuBar(props) {
   };
 
   const isStatusBarFontSizeSubRowSelected = () => statusBarSubmenuOpen() && activeSubItemIndex() === 2;
+  const isFindReplaceFontSizeSubRowSelected = () => findReplaceSubmenuOpen() && activeSubItemIndex() === 0;
 
   const toggleStatusBarFontSizeEdit = () => {
     const nextEditing = !props.statusBarFontSizeEditing();
@@ -132,8 +148,17 @@ export default function MenuBar(props) {
     ddebug("shortcut", "status-bar font-size edit toggled by enter", { editing: nextEditing });
   };
 
+  const toggleFindReplaceFontSizeEdit = () => {
+    const nextEditing = !props.findReplaceFontSizeEditing();
+    if (nextEditing) {
+      props.setFindReplaceFontSizeInput(String(props.findReplaceFontSize()));
+    }
+    props.setFindReplaceFontSizeEditing(nextEditing);
+    ddebug("shortcut", "find-replace font-size edit toggled by enter", { editing: nextEditing });
+  };
+
   const moveMenuBy = (delta) => {
-    closeStatusBarSubmenu();
+    closeSettingsSubmenu();
     const currentMenu = props.openMenu();
     if (!currentMenu) {
       return;
@@ -150,7 +175,7 @@ export default function MenuBar(props) {
   };
 
   const moveItemBy = (delta) => {
-    closeStatusBarSubmenu();
+    closeSettingsSubmenu();
     const items = getSelectableItems();
     if (items.length === 0) {
       return;
@@ -162,7 +187,7 @@ export default function MenuBar(props) {
   };
 
   const moveSubItemBy = (delta) => {
-    const total = 3;
+    const total = statusBarSubmenuOpen() ? 3 : 1;
     const from = activeSubItemIndex();
     const nextIndex = (from + delta + total) % total;
     setActiveSubItemIndex(nextIndex);
@@ -207,12 +232,12 @@ export default function MenuBar(props) {
   createEffect(() => {
     const currentMenu = props.openMenu();
     if (!currentMenu) {
-      closeStatusBarSubmenu();
+      closeSettingsSubmenu();
       return;
     }
     setActiveItemIndex(0);
     if (currentMenu !== "settings") {
-      closeStatusBarSubmenu();
+      closeSettingsSubmenu();
     }
   });
 
@@ -233,21 +258,33 @@ export default function MenuBar(props) {
         return;
       }
 
+      if (findReplaceSubmenuOpen() && props.findReplaceFontSizeEditing()) {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          event.stopImmediatePropagation();
+          props.setFindReplaceFontSizeInput(String(props.findReplaceFontSize()));
+          props.setFindReplaceFontSizeEditing(false);
+        }
+        return;
+      }
+
       if (props.fontSizeEditing && props.fontSizeEditing()) {
         return;
       }
 
-      if (event.key === "Escape" && statusBarSubmenuOpen()) {
+      if (event.key === "Escape" && anySettingsSubmenuOpen()) {
         event.preventDefault();
         event.stopPropagation();
         event.stopImmediatePropagation();
-        closeStatusBarSubmenu();
-        setActiveItemIndex(5);
-        ddebug("shortcut", "status-bar submenu closed by escape");
+        const currentSubmenu = openSubmenu();
+        closeSettingsSubmenu();
+        setActiveItemIndex(currentSubmenu === "find-replace" ? 5 : 6);
+        ddebug("shortcut", "settings submenu closed by escape", { submenu: currentSubmenu });
         return;
       }
 
-      if (statusBarSubmenuOpen()) {
+      if (anySettingsSubmenuOpen()) {
         if (event.key === "ArrowUp") {
           event.preventDefault();
           event.stopPropagation();
@@ -270,8 +307,13 @@ export default function MenuBar(props) {
             props.adjustStatusBarFontSize(-1);
             return;
           }
-          closeStatusBarSubmenu();
-          setActiveItemIndex(5);
+          if (isFindReplaceFontSizeSubRowSelected()) {
+            props.adjustFindReplaceFontSize(-1);
+            return;
+          }
+          const currentSubmenu = openSubmenu();
+          closeSettingsSubmenu();
+          setActiveItemIndex(currentSubmenu === "find-replace" ? 5 : 6);
           return;
         }
         if (event.key === "ArrowRight") {
@@ -280,6 +322,8 @@ export default function MenuBar(props) {
           event.stopImmediatePropagation();
           if (isStatusBarFontSizeSubRowSelected()) {
             props.adjustStatusBarFontSize(1);
+          } else if (isFindReplaceFontSizeSubRowSelected()) {
+            props.adjustFindReplaceFontSize(1);
           }
           return;
         }
@@ -287,7 +331,11 @@ export default function MenuBar(props) {
           event.preventDefault();
           event.stopPropagation();
           event.stopImmediatePropagation();
-          activateStatusBarSubmenuItem();
+          if (statusBarSubmenuOpen()) {
+            activateStatusBarSubmenuItem();
+          } else if (findReplaceSubmenuOpen()) {
+            toggleFindReplaceFontSizeEdit();
+          }
         }
         return;
       }
@@ -310,6 +358,10 @@ export default function MenuBar(props) {
         event.stopPropagation();
         event.stopImmediatePropagation();
         if (props.openMenu() === "settings" && activeItemIndex() === 5) {
+          openFindReplaceSubmenu("arrow-right");
+          return;
+        }
+        if (props.openMenu() === "settings" && activeItemIndex() === 6) {
           openStatusBarSubmenu("arrow-right");
           return;
         }
@@ -485,29 +537,93 @@ export default function MenuBar(props) {
           <button className={menuButton} onClick={() => props.toggleMenu("settings")} onMouseEnter={() => props.switchMenuOnHover("settings")}>{renderMenuLabel("Settings", "S", props.menuAltActive())}</button>
           {props.openMenu() === "settings" ?
             <div className={menuPanel}>
-              <button className={itemClass("settings", 0)} onMouseEnter={() => { setActiveItemIndex(0); closeStatusBarSubmenu(); }} onClick={() => { props.setTextWrapEnabled(!props.textWrapEnabled()); props.closeMenu(); }}>
+              <button className={itemClass("settings", 0)} onMouseEnter={() => { setActiveItemIndex(0); closeSettingsSubmenu(); }} onClick={() => { props.setTextWrapEnabled(!props.textWrapEnabled()); props.closeMenu(); }}>
                 <span>Text Wrap{props.textWrapEnabled() ? " ✓" : ""}</span>
                 <span className={menuShortcut}>{shortcut(props.platformName(), "J")}</span>
               </button>
-              <button className={itemClass("settings", 1)} onMouseEnter={() => { setActiveItemIndex(1); closeStatusBarSubmenu(); }} onClick={() => { props.applyThemeMode("dark"); props.closeMenu(); }}>
+              <button className={itemClass("settings", 1)} onMouseEnter={() => { setActiveItemIndex(1); closeSettingsSubmenu(); }} onClick={() => { props.applyThemeMode("dark"); props.closeMenu(); }}>
                 <span>Dark Mode{props.themeMode() === "dark" ? " ✓" : ""}</span>
                 <span className={menuShortcut}>{shortcut(props.platformName(), "M")}</span>
               </button>
-              <button className={itemClass("settings", 2)} onMouseEnter={() => { setActiveItemIndex(2); closeStatusBarSubmenu(); }} onClick={() => { props.applyThemeMode("light"); props.closeMenu(); }}>
+              <button className={itemClass("settings", 2)} onMouseEnter={() => { setActiveItemIndex(2); closeSettingsSubmenu(); }} onClick={() => { props.applyThemeMode("light"); props.closeMenu(); }}>
                 <span>Light Mode{props.themeMode() === "light" ? " ✓" : ""}</span>
                 <span className={menuShortcut}>{shortcut(props.platformName(), "M")}</span>
               </button>
-              <button className={itemClass("settings", 3)} onMouseEnter={() => { setActiveItemIndex(3); closeStatusBarSubmenu(); }} onClick={() => { const nextValue = !props.highlightSelectionMatchesEnabled(); ddebug("settings", "toggle highlight matches via menu", { nextValue }); props.setHighlightSelectionMatchesEnabled(nextValue); props.closeMenu(); }}>
+              <button className={itemClass("settings", 3)} onMouseEnter={() => { setActiveItemIndex(3); closeSettingsSubmenu(); }} onClick={() => { const nextValue = !props.highlightSelectionMatchesEnabled(); ddebug("settings", "toggle highlight matches via menu", { nextValue }); props.setHighlightSelectionMatchesEnabled(nextValue); props.closeMenu(); }}>
                 <span>Highlight Matches{props.highlightSelectionMatchesEnabled() ? " ✓" : ""}</span>
               </button>
-              <button className={itemClass("settings", 4)} onMouseEnter={() => { setActiveItemIndex(4); closeStatusBarSubmenu(); }} onClick={() => { const nextValue = !props.highlightCurrentLineEnabled(); ddebug("settings", "toggle highlight current line via menu", { nextValue }); props.setHighlightCurrentLineEnabled(nextValue); props.closeMenu(); }}>
+              <button className={itemClass("settings", 4)} onMouseEnter={() => { setActiveItemIndex(4); closeSettingsSubmenu(); }} onClick={() => { const nextValue = !props.highlightCurrentLineEnabled(); ddebug("settings", "toggle highlight current line via menu", { nextValue }); props.setHighlightCurrentLineEnabled(nextValue); props.closeMenu(); }}>
                 <span>Highlight Current Line{props.highlightCurrentLineEnabled() ? " ✓" : ""}</span>
               </button>
 
               <div className="relative">
                 <button
                   className={itemClass("settings", 5)}
-                  onMouseEnter={() => { setActiveItemIndex(5); openStatusBarSubmenu("hover-parent"); }}
+                  onMouseEnter={() => { setActiveItemIndex(5); openFindReplaceSubmenu("hover-parent"); }}
+                  onClick={() => openFindReplaceSubmenu("click-parent")}
+                >
+                  <span>Find/Replace</span>
+                  <span className={`${menuArrow} pointer-events-none`} aria-hidden="true">
+                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                  </span>
+                </button>
+                {findReplaceSubmenuOpen() ?
+                  <div className={subMenuPanel} onMouseEnter={() => openFindReplaceSubmenu("hover-submenu")}>
+                    <div className={subRowClass(0)} onMouseEnter={() => setActiveSubItemIndex(0)}>
+                      <span className="text-sm text-gray-700 dark:text-gray-200">Font</span>
+                      <div className="flex items-center gap-2">
+                        <button className={menuArrow} onClick={() => props.adjustFindReplaceFontSize(-1)} aria-label="Decrease find replace font size">
+                          <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="15 18 9 12 15 6" />
+                          </svg>
+                        </button>
+                        {props.findReplaceFontSizeEditing() ?
+                          <input
+                            className="w-12 rounded border border-gray-200 bg-white px-1 text-center text-sm text-gray-900 outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                            type="text"
+                            inputMode="numeric"
+                            ref={props.findReplaceFontSizeInputRef}
+                            value={props.findReplaceFontSizeInput()}
+                            onInput={(event) => props.setFindReplaceFontSizeInput(event.currentTarget.value)}
+                            onBlur={props.commitFindReplaceFontSizeInput}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                props.commitFindReplaceFontSizeInput();
+                              } else if (event.key === "Escape") {
+                                event.preventDefault();
+                                props.setFindReplaceFontSizeInput(String(props.findReplaceFontSize()));
+                                props.setFindReplaceFontSizeEditing(false);
+                              }
+                            }}
+                            aria-label="Find replace font size"
+                          />
+                          :
+                          <button
+                            className="w-12 text-center text-sm text-gray-700 hover:text-gray-900 dark:text-gray-200 dark:hover:text-white"
+                            onClick={() => toggleFindReplaceFontSizeEdit()}
+                            aria-label="Edit find replace font size"
+                          >
+                            {props.findReplaceFontSize()} px
+                          </button>
+                        }
+                        <button className={menuArrow} onClick={() => props.adjustFindReplaceFontSize(1)} aria-label="Increase find replace font size">
+                          <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="9 18 15 12 9 6" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  : null}
+              </div>
+
+              <div className="relative">
+                <button
+                  className={itemClass("settings", 6)}
+                  onMouseEnter={() => { setActiveItemIndex(6); openStatusBarSubmenu("hover-parent"); }}
                   onClick={() => openStatusBarSubmenu("click-parent")}
                 >
                   <span>Status Bar</span>

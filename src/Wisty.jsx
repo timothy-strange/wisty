@@ -35,6 +35,9 @@ export default function Wisty() {
   const [statusBarFontSize, setStatusBarFontSize] = createSignal(12);
   const [statusBarFontSizeEditing, setStatusBarFontSizeEditing] = createSignal(false);
   const [statusBarFontSizeInput, setStatusBarFontSizeInput] = createSignal("12");
+  const [findReplaceFontSize, setFindReplaceFontSize] = createSignal(14);
+  const [findReplaceFontSizeEditing, setFindReplaceFontSizeEditing] = createSignal(false);
+  const [findReplaceFontSizeInput, setFindReplaceFontSizeInput] = createSignal("14");
   const [openMenu, setOpenMenu] = createSignal("");
   const [menuAltActive, setMenuAltActive] = createSignal(false);
   const [aboutOpen, setAboutOpen] = createSignal(false);
@@ -45,6 +48,7 @@ export default function Wisty() {
   let menuBar;
   let fontSizeInputRef;
   let statusBarFontSizeInputRef;
+  let findReplaceFontSizeInputRef;
   let unlistenClose;
   let allowImmediateClose = false;
   let closeRequestSeq = 0;
@@ -100,6 +104,7 @@ export default function Wisty() {
     setOpenMenu("");
     setFontSizeEditing(false);
     setStatusBarFontSizeEditing(false);
+    setFindReplaceFontSizeEditing(false);
     dtrace("menu", "closeMenu");
   };
 
@@ -157,6 +162,23 @@ export default function Wisty() {
     setStatusBarFontSizeInput(String(clamped));
     setStatusBarFontSizeEditing(false);
     ddebug("font", "commitStatusBarFontSizeInput", { raw: statusBarFontSizeInput(), clamped });
+  };
+
+  const adjustFindReplaceFontSize = (delta) => {
+    const nextSize = Math.min(18, Math.max(8, findReplaceFontSize() + delta));
+    setFindReplaceFontSize(nextSize);
+    setFindReplaceFontSizeInput(String(nextSize));
+    ddebug("font", "adjustFindReplaceFontSize", { delta, nextSize });
+  };
+
+  const commitFindReplaceFontSizeInput = () => {
+    const parsed = Number.parseInt(findReplaceFontSizeInput(), 10);
+    const safeSize = Number.isNaN(parsed) ? findReplaceFontSize() : parsed;
+    const clamped = Math.min(18, Math.max(8, safeSize));
+    setFindReplaceFontSize(clamped);
+    setFindReplaceFontSizeInput(String(clamped));
+    setFindReplaceFontSizeEditing(false);
+    ddebug("font", "commitFindReplaceFontSizeInput", { raw: findReplaceFontSizeInput(), clamped });
   };
 
   const cycleFontStyle = () => {
@@ -290,6 +312,9 @@ export default function Wisty() {
     statusBarFontSize,
     setStatusBarFontSize,
     setStatusBarFontSizeInput,
+    findReplaceFontSize,
+    setFindReplaceFontSize,
+    setFindReplaceFontSizeInput,
     highlightSelectionMatchesEnabled,
     setHighlightSelectionMatchesEnabled,
     highlightCurrentLineEnabled,
@@ -401,6 +426,7 @@ export default function Wisty() {
     textFontClass,
     fontSize,
     themeMode,
+    findReplaceFontSize,
     confirmOpen: fileActions.confirmOpen,
     aboutOpen,
     menuOpen: openMenu,
@@ -642,6 +668,14 @@ export default function Wisty() {
   });
 
   createEffect(() => {
+    if (findReplaceFontSizeEditing() && findReplaceFontSizeInputRef) {
+      findReplaceFontSizeInputRef.focus();
+      findReplaceFontSizeInputRef.select();
+      dtrace("font", "focus find replace font size input");
+    }
+  });
+
+  createEffect(() => {
     if (statusBarVisible() && statusBarStatsVisible()) {
       updateStats();
     }
@@ -700,6 +734,14 @@ export default function Wisty() {
         statusBarFontSizeInputRef={(el) => { statusBarFontSizeInputRef = el; }}
         adjustStatusBarFontSize={adjustStatusBarFontSize}
         commitStatusBarFontSizeInput={commitStatusBarFontSizeInput}
+        findReplaceFontSize={findReplaceFontSize}
+        findReplaceFontSizeEditing={findReplaceFontSizeEditing}
+        setFindReplaceFontSizeEditing={setFindReplaceFontSizeEditing}
+        findReplaceFontSizeInput={findReplaceFontSizeInput}
+        setFindReplaceFontSizeInput={setFindReplaceFontSizeInput}
+        findReplaceFontSizeInputRef={(el) => { findReplaceFontSizeInputRef = el; }}
+        adjustFindReplaceFontSize={adjustFindReplaceFontSize}
+        commitFindReplaceFontSizeInput={commitFindReplaceFontSizeInput}
         setAboutOpen={setAboutOpen}
       />
 

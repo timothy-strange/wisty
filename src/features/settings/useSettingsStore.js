@@ -45,6 +45,7 @@ export default function useSettingsStore(options) {
         const storedStatusBar = await settingsStore.get("statusBarVisible");
         const storedStatusBarStatsVisible = await settingsStore.get("statusBarStatsVisible");
         const storedStatusBarFontSize = await settingsStore.get("statusBarFontSize");
+        const storedFindReplaceFontSize = await settingsStore.get("findReplaceFontSize");
         const storedTextWrap = await settingsStore.get("textWrapEnabled");
         const storedThemeMode = await settingsStore.get("themeMode");
         const storedHighlightSelectionMatches = await settingsStore.get("highlightSelectionMatchesEnabled");
@@ -73,6 +74,12 @@ export default function useSettingsStore(options) {
           options.setStatusBarFontSize(clampedStatusBarFontSize);
           options.setStatusBarFontSizeInput(String(clampedStatusBarFontSize));
           ddebug("settings", "applied stored statusBarFontSize", { storedStatusBarFontSize: clampedStatusBarFontSize });
+        }
+        if (typeof storedFindReplaceFontSize === "number" && Number.isFinite(storedFindReplaceFontSize)) {
+          const clampedFindReplaceFontSize = Math.min(18, Math.max(8, storedFindReplaceFontSize));
+          options.setFindReplaceFontSize(clampedFindReplaceFontSize);
+          options.setFindReplaceFontSizeInput(String(clampedFindReplaceFontSize));
+          ddebug("settings", "applied stored findReplaceFontSize", { storedFindReplaceFontSize: clampedFindReplaceFontSize });
         }
         if (typeof storedTextWrap === "boolean") {
           options.setTextWrapEnabled(storedTextWrap);
@@ -127,6 +134,10 @@ export default function useSettingsStore(options) {
 
   createEffect(() => {
     saveSetting("statusBarFontSize", options.statusBarFontSize());
+  });
+
+  createEffect(() => {
+    saveSetting("findReplaceFontSize", options.findReplaceFontSize());
   });
 
   createEffect(() => {

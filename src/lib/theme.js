@@ -25,6 +25,21 @@ export const buildEditorTheme = (EditorView, options) => EditorView.theme({
     fontFamily: fontFamilyForClass(options.textFontClass),
     fontSize: `${options.fontSize}px`
   },
+  ".cm-panels": {
+    fontSize: `${options.findReplaceFontSize}px`
+  },
+  ".cm-search": {
+    fontSize: `${options.findReplaceFontSize}px`
+  },
+  ".cm-search input": {
+    fontSize: `${options.findReplaceFontSize}px`
+  },
+  ".cm-search button": {
+    fontSize: `${options.findReplaceFontSize}px`
+  },
+  ".cm-search label": {
+    fontSize: `${options.findReplaceFontSize}px`
+  },
   ".cm-selectionBackground": {
     background: options.themeMode === "dark" ? "rgba(59,130,246,0.38)" : "rgba(147,197,253,0.55)"
   },

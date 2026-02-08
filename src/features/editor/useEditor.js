@@ -39,7 +39,8 @@ export default function useEditor(options) {
     textFontClass: options.textFontClass(),
     fontSize: options.fontSize(),
     themeMode: options.themeMode(),
-    highlightCurrentLineEnabled: options.highlightCurrentLineEnabled()
+    highlightCurrentLineEnabled: options.highlightCurrentLineEnabled(),
+    findReplaceFontSize: options.findReplaceFontSize()
   });
 
   const focusEditor = () => {
@@ -236,6 +237,7 @@ export default function useEditor(options) {
     options.textFontClass();
     options.themeMode();
     options.highlightCurrentLineEnabled();
+    options.findReplaceFontSize();
     if (!editorView) {
       return;
     }
@@ -245,7 +247,8 @@ export default function useEditor(options) {
     dtrace("editor", "theme reconfigured", {
       themeMode: options.themeMode(),
       textFontClass: options.textFontClass(),
-      fontSize: options.fontSize()
+      fontSize: options.fontSize(),
+      findReplaceFontSize: options.findReplaceFontSize()
     });
   });
 
