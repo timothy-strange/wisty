@@ -12,7 +12,6 @@ import { createEditorAdapter } from "./core/editor/editorAdapter";
 import { getDirectoryFromFilePath, openTextFile, saveTextFile, saveTextFileAs } from "./core/files/fileService";
 import { createSettingsStore } from "./core/settings/settingsStore";
 import { chooseEditorFont } from "./core/fonts/fontDialog";
-import { FONT_PRESETS } from "./core/settings/settingsTypes";
 
 type CloseFlowState = "idle" | "awaiting-discard" | "force-closing";
 
@@ -30,6 +29,7 @@ function App() {
   const [confirmDiscardOpen, setConfirmDiscardOpen] = createSignal(false);
   const [pendingAction, setPendingAction] = createSignal<null | (() => Promise<void>)>(null);
   const [closeFlowState, setCloseFlowState] = createSignal<CloseFlowState>("idle");
+  const [activeMenuId, setActiveMenuId] = createSignal<string | null>(null);
 
   let editorHostRef: HTMLDivElement | undefined;
   let unlistenCloseRequest: (() => void) | undefined;
@@ -218,36 +218,8 @@ function App() {
       checked: () => settingsStore.state.highlightSelectionMatchesEnabled
     },
     {
-      id: "view.font.minus",
-      label: "Font Size Down",
-      run: () => settingsStore.actions.setFontSize(settingsStore.state.fontSize - 1)
-    },
-    {
-      id: "view.font.plus",
-      label: "Font Size Up",
-      run: () => settingsStore.actions.setFontSize(settingsStore.state.fontSize + 1)
-    },
-    {
-      id: "view.font.sans",
-      label: "Font Sans",
-      run: () => settingsStore.actions.setFontFamily(FONT_PRESETS.sans),
-      checked: () => settingsStore.state.fontFamily === FONT_PRESETS.sans
-    },
-    {
-      id: "view.font.serif",
-      label: "Font Serif",
-      run: () => settingsStore.actions.setFontFamily(FONT_PRESETS.serif),
-      checked: () => settingsStore.state.fontFamily === FONT_PRESETS.serif
-    },
-    {
-      id: "view.font.mono",
-      label: "Font Mono",
-      run: () => settingsStore.actions.setFontFamily(FONT_PRESETS.mono),
-      checked: () => settingsStore.state.fontFamily === FONT_PRESETS.mono
-    },
-    {
       id: "view.font.browser",
-      label: "Choose Font...",
+      label: "Font...",
       run: chooseEditorFontAction
     },
     {
@@ -297,13 +269,7 @@ function App() {
         { type: "command", commandId: "view.highlight.current" },
         { type: "command", commandId: "view.highlight.matches" },
         { type: "separator" },
-        { type: "command", commandId: "view.font.minus" },
-        { type: "command", commandId: "view.font.plus" },
-        { type: "command", commandId: "view.font.browser" },
-        { type: "separator" },
-        { type: "command", commandId: "view.font.sans" },
-        { type: "command", commandId: "view.font.serif" },
-        { type: "command", commandId: "view.font.mono" }
+        { type: "command", commandId: "view.font.browser" }
       ]
     },
     {
@@ -322,6 +288,22 @@ function App() {
         void resolveConfirmDiscard(false);
       }
       return;
+    }
+
+    if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+      const lowered = event.key.toLowerCase();
+      const menuIdMap: Record<string, string> = {
+        f: "file",
+        e: "edit",
+        v: "view",
+        h: "help"
+      };
+      const targetMenuId = menuIdMap[lowered];
+      if (targetMenuId) {
+        event.preventDefault();
+        setActiveMenuId(targetMenuId);
+        return;
+      }
     }
 
     if (modKey && !event.shiftKey && event.key.toLowerCase() === "n") {
@@ -433,7 +415,13 @@ function App() {
 
   return (
     <main class="app-shell">
-      <MenuBar sections={menuSections()} registry={commandRegistry} />
+      <MenuBar
+        sections={menuSections()}
+        registry={commandRegistry}
+        activeMenuId={activeMenuId()}
+        onActiveMenuIdChange={setActiveMenuId}
+        onRequestEditorFocus={() => editorAdapter.focus()}
+      />
 
       <section class="editor-shell">
         <div ref={editorHostRef} class="editor-host" />

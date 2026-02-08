@@ -92,7 +92,13 @@ body {
 }
 
 .menu-trigger:hover,
-.menu-trigger.open {
+.menu-trigger[data-expanded],
+.menu-trigger[data-highlighted] {
+  background: var(--menu-trigger-hover);
+}
+
+.menu-trigger:focus-visible {
+  outline: none;
   background: var(--menu-trigger-hover);
 }
 
@@ -129,7 +135,8 @@ body {
 }
 
 .menu-item:hover:not(:disabled),
-.menu-item:focus-visible:not(:disabled) {
+.menu-item:focus-visible:not(:disabled),
+.menu-item[data-highlighted]:not(:disabled) {
   background: var(--menu-item-hover);
   outline: none;
 }
