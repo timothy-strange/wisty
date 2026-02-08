@@ -7,7 +7,7 @@ import {
   highlightActiveLine,
   keymap
 } from "@codemirror/view";
-import { highlightSelectionMatches, openSearchPanel, search, searchKeymap } from "@codemirror/search";
+import { closeSearchPanel, highlightSelectionMatches, openSearchPanel, search, searchKeymap, searchPanelOpen } from "@codemirror/search";
 import { defaultKeymap, history, historyKeymap, redo, undo } from "@codemirror/commands";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { ddebug, derror, dinfo, dtrace } from "../../lib/debugLog";
@@ -30,7 +30,7 @@ export default function useEditor(options) {
     EditorState.allowMultipleSelections.of(true),
     keymap.of([
       ...defaultKeymap,
-      ...searchKeymap,
+      ...searchKeymap.filter((binding) => binding.key !== "Mod-f"),
       ...historyKeymap
     ])
   ];
@@ -92,9 +92,12 @@ export default function useEditor(options) {
     dtrace("editor", "setEditorText applied", { length: text.length });
   };
 
-  const openFindPanel = () => {
+  const toggleFindPanel = () => {
     if (!editorView) {
       return false;
+    }
+    if (searchPanelOpen(editorView.state)) {
+      return closeSearchPanel(editorView);
     }
     const opened = openSearchPanel(editorView);
     if (opened && editorHost) {
@@ -109,9 +112,12 @@ export default function useEditor(options) {
     return opened;
   };
 
-  const openReplacePanel = () => {
+  const toggleReplacePanel = () => {
     if (!editorView) {
       return false;
+    }
+    if (searchPanelOpen(editorView.state)) {
+      return closeSearchPanel(editorView);
     }
     const opened = openSearchPanel(editorView);
     if (opened && editorHost) {
@@ -323,8 +329,8 @@ export default function useEditor(options) {
     focusEditor,
     getEditorText,
     setEditorText,
-    openFindPanel,
-    openReplacePanel,
+    toggleFindPanel,
+    toggleReplacePanel,
     cutSelection,
     copySelection,
     pasteSelection,

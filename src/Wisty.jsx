@@ -56,8 +56,8 @@ export default function Wisty() {
     focusEditor: () => {},
     getEditorText: () => "",
     setEditorText: () => {},
-    openFindPanel: () => false,
-    openReplacePanel: () => false,
+    toggleFindPanel: () => false,
+    toggleReplacePanel: () => false,
     cutSelection: async () => false,
     copySelection: async () => false,
     pasteSelection: async () => false,
@@ -253,15 +253,15 @@ export default function Wisty() {
   };
 
   const findInDocument = () => {
-    const opened = editorApi.openFindPanel();
-    ddebug("shortcut", "find panel requested", { opened });
-    return opened;
+    const handled = editorApi.toggleFindPanel();
+    ddebug("shortcut", "find panel toggled", { handled });
+    return handled;
   };
 
   const replaceInDocument = () => {
-    const opened = editorApi.openReplacePanel();
-    ddebug("shortcut", "replace panel requested", { opened });
-    return opened;
+    const handled = editorApi.toggleReplacePanel();
+    ddebug("shortcut", "replace panel toggled", { handled });
+    return handled;
   };
 
   const undoInDocument = () => {
@@ -421,8 +421,6 @@ export default function Wisty() {
     { key: "Mod--", run: runIfReady(() => { ddebug("shortcut", "Mod--"); return adjustFontSize(-1); }), preventDefault: true },
     { key: "Mod-n", run: runIfReady(() => { ddebug("shortcut", "Mod-n"); return fileActions.newFile(); }), preventDefault: true },
     { key: "Mod-o", run: runIfReady(() => { ddebug("shortcut", "Mod-o"); return fileActions.openFile(); }), preventDefault: true },
-    { key: "Mod-f", run: runIfReady(() => { ddebug("shortcut", "Mod-f"); return findInDocument(); }), preventDefault: true },
-    { key: "Mod-h", run: runIfReady(() => { ddebug("shortcut", "Mod-h"); return replaceInDocument(); }), preventDefault: true },
     { key: "Mod-s", run: runIfReady(() => { ddebug("shortcut", "Mod-s"); void fileActions.saveFile(); }), preventDefault: true },
     { key: "Mod-Shift-s", run: runIfReady(() => { ddebug("shortcut", "Mod-Shift-s"); void fileActions.saveFileAs(); }), preventDefault: true },
     { key: "Mod-q", run: runIfReady(() => { ddebug("shortcut", "Mod-q"); return closeApplication("shortcut-mod-q"); }), preventDefault: true },
@@ -472,9 +470,11 @@ export default function Wisty() {
     });
 
     const handleKeyDown = (event) => {
+      const isModF = (event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "f";
+      const isModH = (event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "h";
       const isModM = (event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "m";
       const isF1 = event.key === "F1";
-      if (isModM || isF1) {
+      if (isModF || isModH || isModM || isF1) {
         const targetTag = event.target && event.target.tagName ? event.target.tagName : null;
         ddebug("keyboard", "global key diagnostic", {
           key: event.key,
@@ -489,6 +489,44 @@ export default function Wisty() {
           confirmOpen: fileActions.confirmOpen(),
           aboutOpen: aboutOpen()
         });
+      }
+
+      if (isModF) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        if (event.repeat) {
+          return;
+        }
+        if (fileActions.confirmOpen() || aboutOpen()) {
+          ddebug("keyboard", "global Mod-f ignored due to modal", {
+            confirmOpen: fileActions.confirmOpen(),
+            aboutOpen: aboutOpen()
+          });
+          return;
+        }
+        ddebug("shortcut", "Mod-f global fallback fired");
+        findInDocument();
+        return;
+      }
+
+      if (isModH) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        if (event.repeat) {
+          return;
+        }
+        if (fileActions.confirmOpen() || aboutOpen()) {
+          ddebug("keyboard", "global Mod-h ignored due to modal", {
+            confirmOpen: fileActions.confirmOpen(),
+            aboutOpen: aboutOpen()
+          });
+          return;
+        }
+        ddebug("shortcut", "Mod-h global fallback fired");
+        replaceInDocument();
+        return;
       }
 
       if (isF1) {
