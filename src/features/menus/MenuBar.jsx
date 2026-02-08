@@ -21,7 +21,7 @@ const renderMenuLabel = (label, shortcutChar, menuAltActive) => {
 };
 
 export default function MenuBar(props) {
-  const menuOrder = ["file", "font", "settings", "app"];
+  const menuOrder = ["file", "edit", "font", "settings", "app"];
   const subMenuPanel = "absolute left-full top-0 w-max rounded border border-gray-200 bg-white shadow-md dark:border-gray-700 dark:bg-gray-800 flex flex-col z-50";
   const [activeItemIndex, setActiveItemIndex] = createSignal(0);
   const [openSubmenu, setOpenSubmenu] = createSignal("");
@@ -52,6 +52,15 @@ export default function MenuBar(props) {
       { id: "save-as", run: () => { props.saveFileAs(); props.closeMenu(); } },
       { id: "quit", run: () => { props.closeApplication(); props.closeMenu(); } }
     ],
+    edit: [
+      { id: "undo", run: () => { props.undoInDocument(); props.closeMenu(); } },
+      { id: "redo", run: () => { props.redoInDocument(); props.closeMenu(); } },
+      { id: "cut", run: () => { props.cutInDocument(); props.closeMenu(); } },
+      { id: "copy", run: () => { props.copyInDocument(); props.closeMenu(); } },
+      { id: "paste", run: () => { props.pasteInDocument(); props.closeMenu(); } },
+      { id: "find", run: () => { props.findInDocument(); props.closeMenu(); } },
+      { id: "replace", run: () => { props.replaceInDocument(); props.closeMenu(); } }
+    ],
     font: [
       { id: "font-sans", run: () => { props.setTextFontClass("font-sans"); props.closeMenu(); } },
       { id: "font-serif", run: () => { props.setTextFontClass("font-serif"); props.closeMenu(); } },
@@ -72,6 +81,8 @@ export default function MenuBar(props) {
       { id: "text-wrap", run: () => { props.setTextWrapEnabled(!props.textWrapEnabled()); props.closeMenu(); } },
       { id: "dark-mode", run: () => { props.applyThemeMode("dark"); props.closeMenu(); } },
       { id: "light-mode", run: () => { props.applyThemeMode("light"); props.closeMenu(); } },
+      { id: "highlight-matches", run: () => { props.setHighlightSelectionMatchesEnabled(!props.highlightSelectionMatchesEnabled()); props.closeMenu(); } },
+      { id: "highlight-current-line", run: () => { props.setHighlightCurrentLineEnabled(!props.highlightCurrentLineEnabled()); props.closeMenu(); } },
       { id: "status-bar-submenu", run: () => openStatusBarSubmenu("enter-parent") }
     ],
     app: [
@@ -231,7 +242,7 @@ export default function MenuBar(props) {
         event.stopPropagation();
         event.stopImmediatePropagation();
         closeStatusBarSubmenu();
-        setActiveItemIndex(3);
+        setActiveItemIndex(5);
         ddebug("shortcut", "status-bar submenu closed by escape");
         return;
       }
@@ -260,7 +271,7 @@ export default function MenuBar(props) {
             return;
           }
           closeStatusBarSubmenu();
-          setActiveItemIndex(3);
+          setActiveItemIndex(5);
           return;
         }
         if (event.key === "ArrowRight") {
@@ -298,7 +309,7 @@ export default function MenuBar(props) {
         event.preventDefault();
         event.stopPropagation();
         event.stopImmediatePropagation();
-        if (props.openMenu() === "settings" && activeItemIndex() === 3) {
+        if (props.openMenu() === "settings" && activeItemIndex() === 5) {
           openStatusBarSubmenu("arrow-right");
           return;
         }
@@ -367,6 +378,42 @@ export default function MenuBar(props) {
               <button className={itemClass("file", 4)} onMouseEnter={() => setActiveItemIndex(4)} onClick={() => { props.closeApplication(); props.closeMenu(); }}>
                 <span>Quit</span>
                 <span className={menuShortcut}>{shortcut(props.platformName(), "Q")}</span>
+              </button>
+            </div>
+            : null}
+        </div>
+
+        <div className="relative">
+          <button className={menuButton} onClick={() => props.toggleMenu("edit")} onMouseEnter={() => props.switchMenuOnHover("edit")}>{renderMenuLabel("Edit", "E", props.menuAltActive())}</button>
+          {props.openMenu() === "edit" ?
+            <div className={menuPanel}>
+              <button className={itemClass("edit", 0)} onMouseEnter={() => setActiveItemIndex(0)} onClick={() => { props.undoInDocument(); props.closeMenu(); }}>
+                <span>Undo</span>
+                <span className={menuShortcut}>{shortcut(props.platformName(), "Z")}</span>
+              </button>
+              <button className={itemClass("edit", 1)} onMouseEnter={() => setActiveItemIndex(1)} onClick={() => { props.redoInDocument(); props.closeMenu(); }}>
+                <span>Redo</span>
+                <span className={menuShortcut}>{shortcut(props.platformName(), "Z", true)}</span>
+              </button>
+              <button className={itemClass("edit", 2)} onMouseEnter={() => setActiveItemIndex(2)} onClick={() => { props.cutInDocument(); props.closeMenu(); }}>
+                <span>Cut</span>
+                <span className={menuShortcut}>{shortcut(props.platformName(), "X")}</span>
+              </button>
+              <button className={itemClass("edit", 3)} onMouseEnter={() => setActiveItemIndex(3)} onClick={() => { props.copyInDocument(); props.closeMenu(); }}>
+                <span>Copy</span>
+                <span className={menuShortcut}>{shortcut(props.platformName(), "C")}</span>
+              </button>
+              <button className={itemClass("edit", 4)} onMouseEnter={() => setActiveItemIndex(4)} onClick={() => { props.pasteInDocument(); props.closeMenu(); }}>
+                <span>Paste</span>
+                <span className={menuShortcut}>{shortcut(props.platformName(), "V")}</span>
+              </button>
+              <button className={itemClass("edit", 5)} onMouseEnter={() => setActiveItemIndex(5)} onClick={() => { props.findInDocument(); props.closeMenu(); }}>
+                <span>Find</span>
+                <span className={menuShortcut}>{shortcut(props.platformName(), "F")}</span>
+              </button>
+              <button className={itemClass("edit", 6)} onMouseEnter={() => setActiveItemIndex(6)} onClick={() => { props.replaceInDocument(); props.closeMenu(); }}>
+                <span>Replace</span>
+                <span className={menuShortcut}>{shortcut(props.platformName(), "H")}</span>
               </button>
             </div>
             : null}
@@ -450,11 +497,17 @@ export default function MenuBar(props) {
                 <span>Light Mode{props.themeMode() === "light" ? " ✓" : ""}</span>
                 <span className={menuShortcut}>{shortcut(props.platformName(), "M")}</span>
               </button>
+              <button className={itemClass("settings", 3)} onMouseEnter={() => { setActiveItemIndex(3); closeStatusBarSubmenu(); }} onClick={() => { const nextValue = !props.highlightSelectionMatchesEnabled(); ddebug("settings", "toggle highlight matches via menu", { nextValue }); props.setHighlightSelectionMatchesEnabled(nextValue); props.closeMenu(); }}>
+                <span>Highlight Matches{props.highlightSelectionMatchesEnabled() ? " ✓" : ""}</span>
+              </button>
+              <button className={itemClass("settings", 4)} onMouseEnter={() => { setActiveItemIndex(4); closeStatusBarSubmenu(); }} onClick={() => { const nextValue = !props.highlightCurrentLineEnabled(); ddebug("settings", "toggle highlight current line via menu", { nextValue }); props.setHighlightCurrentLineEnabled(nextValue); props.closeMenu(); }}>
+                <span>Highlight Current Line{props.highlightCurrentLineEnabled() ? " ✓" : ""}</span>
+              </button>
 
               <div className="relative">
                 <button
-                  className={itemClass("settings", 3)}
-                  onMouseEnter={() => { setActiveItemIndex(3); openStatusBarSubmenu("hover-parent"); }}
+                  className={itemClass("settings", 5)}
+                  onMouseEnter={() => { setActiveItemIndex(5); openStatusBarSubmenu("hover-parent"); }}
                   onClick={() => openStatusBarSubmenu("click-parent")}
                 >
                   <span>Status Bar</span>

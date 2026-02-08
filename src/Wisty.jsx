@@ -28,6 +28,8 @@ export default function Wisty() {
   const [fontSizeEditing, setFontSizeEditing] = createSignal(false);
   const [fontSizeInput, setFontSizeInput] = createSignal("14");
   const [themeMode, setThemeMode] = createSignal("light");
+  const [highlightSelectionMatchesEnabled, setHighlightSelectionMatchesEnabled] = createSignal(true);
+  const [highlightCurrentLineEnabled, setHighlightCurrentLineEnabled] = createSignal(false);
   const [statusBarVisible, setStatusBarVisible] = createSignal(true);
   const [statusBarStatsVisible, setStatusBarStatsVisible] = createSignal(true);
   const [statusBarFontSize, setStatusBarFontSize] = createSignal(12);
@@ -49,7 +51,14 @@ export default function Wisty() {
   let editorApi = {
     focusEditor: () => {},
     getEditorText: () => "",
-    setEditorText: () => {}
+    setEditorText: () => {},
+    openFindPanel: () => false,
+    openReplacePanel: () => false,
+    cutSelection: () => false,
+    copySelection: () => false,
+    pasteSelection: () => false,
+    undoEdit: () => false,
+    redoEdit: () => false
   };
 
   const updateEditedState = () => {
@@ -209,6 +218,48 @@ export default function Wisty() {
     dtrace("about", "closeAbout");
   };
 
+  const findInDocument = () => {
+    const opened = editorApi.openFindPanel();
+    ddebug("shortcut", "find panel requested", { opened });
+    return opened;
+  };
+
+  const replaceInDocument = () => {
+    const opened = editorApi.openReplacePanel();
+    ddebug("shortcut", "replace panel requested", { opened });
+    return opened;
+  };
+
+  const undoInDocument = () => {
+    const handled = editorApi.undoEdit();
+    ddebug("shortcut", "undo requested from menu", { handled });
+    return handled;
+  };
+
+  const redoInDocument = () => {
+    const handled = editorApi.redoEdit();
+    ddebug("shortcut", "redo requested from menu", { handled });
+    return handled;
+  };
+
+  const cutInDocument = () => {
+    const handled = editorApi.cutSelection();
+    ddebug("shortcut", "cut requested from menu", { handled });
+    return handled;
+  };
+
+  const copyInDocument = () => {
+    const handled = editorApi.copySelection();
+    ddebug("shortcut", "copy requested from menu", { handled });
+    return handled;
+  };
+
+  const pasteInDocument = () => {
+    const handled = editorApi.pasteSelection();
+    ddebug("shortcut", "paste requested from menu", { handled });
+    return handled;
+  };
+
   const { lastDirectory, recordLastDirectory } = useSettingsStore({
     fontSize,
     setFontSize,
@@ -222,6 +273,10 @@ export default function Wisty() {
     statusBarFontSize,
     setStatusBarFontSize,
     setStatusBarFontSizeInput,
+    highlightSelectionMatchesEnabled,
+    setHighlightSelectionMatchesEnabled,
+    highlightCurrentLineEnabled,
+    setHighlightCurrentLineEnabled,
     textWrapEnabled,
     setTextWrapEnabled,
     themeMode,
@@ -250,6 +305,11 @@ export default function Wisty() {
     const confirmOpen = fileActions.confirmOpen();
     const closeReqId = activeCloseRequestId();
     ddebug("close", "confirmOpen state changed", { closeReqId, confirmOpen });
+    if (confirmOpen && openMenu() !== "") {
+      ddebug("close", "confirmOpen forcing menu close", { closeReqId, openMenu: openMenu() });
+      closeMenu();
+      setMenuAltActive(false);
+    }
     if (confirmOpen) {
       probeConfirmDialogDom("confirm-open-true", closeReqId);
     } else {
@@ -275,6 +335,20 @@ export default function Wisty() {
     ddebug("theme", "themeMode state changed", { themeMode: themeMode(), closeReqId: activeCloseRequestId() });
   });
 
+  createEffect(() => {
+    ddebug("settings", "highlightSelectionMatchesEnabled state changed", {
+      value: highlightSelectionMatchesEnabled(),
+      closeReqId: activeCloseRequestId()
+    });
+  });
+
+  createEffect(() => {
+    ddebug("settings", "highlightCurrentLineEnabled state changed", {
+      value: highlightCurrentLineEnabled(),
+      closeReqId: activeCloseRequestId()
+    });
+  });
+
   const runIfReady = (action) => (view) => {
     if (fileActions.confirmOpen() || aboutOpen()) {
       dtrace("shortcut", "runIfReady blocked by modal", { confirmOpen: fileActions.confirmOpen(), aboutOpen: aboutOpen() });
@@ -293,6 +367,8 @@ export default function Wisty() {
     { key: "Mod--", run: runIfReady(() => { ddebug("shortcut", "Mod--"); return adjustFontSize(-1); }), preventDefault: true },
     { key: "Mod-n", run: runIfReady(() => { ddebug("shortcut", "Mod-n"); return fileActions.newFile(); }), preventDefault: true },
     { key: "Mod-o", run: runIfReady(() => { ddebug("shortcut", "Mod-o"); return fileActions.openFile(); }), preventDefault: true },
+    { key: "Mod-f", run: runIfReady(() => { ddebug("shortcut", "Mod-f"); return findInDocument(); }), preventDefault: true },
+    { key: "Mod-h", run: runIfReady(() => { ddebug("shortcut", "Mod-h"); return replaceInDocument(); }), preventDefault: true },
     { key: "Mod-s", run: runIfReady(() => { ddebug("shortcut", "Mod-s"); void fileActions.saveFile(); }), preventDefault: true },
     { key: "Mod-Shift-s", run: runIfReady(() => { ddebug("shortcut", "Mod-Shift-s"); void fileActions.saveFileAs(); }), preventDefault: true },
     { key: "Mod-q", run: runIfReady(() => { ddebug("shortcut", "Mod-q"); return closeApplication("shortcut-mod-q"); }), preventDefault: true },
@@ -311,6 +387,8 @@ export default function Wisty() {
     confirmOpen: fileActions.confirmOpen,
     aboutOpen,
     menuOpen: openMenu,
+    highlightSelectionMatchesEnabled,
+    highlightCurrentLineEnabled,
     buildKeymap,
     onDocChanged: () => {
       updateEditedState();
@@ -418,6 +496,7 @@ export default function Wisty() {
           ddebug("keyboard", "escape closes menu", { menu: openMenu() });
           closeMenu();
           setMenuAltActive(false);
+          editorApi.focusEditor();
         }
         return;
       }
@@ -426,6 +505,8 @@ export default function Wisty() {
         let menuName = "";
         if (key === "f") {
           menuName = "file";
+        } else if (key === "e") {
+          menuName = "edit";
         } else if (key === "o") {
           menuName = "font";
         } else if (key === "s") {
@@ -561,6 +642,13 @@ export default function Wisty() {
         menuAltActive={menuAltActive}
         platformName={platformName}
         openFile={fileActions.openFile}
+        findInDocument={findInDocument}
+        replaceInDocument={replaceInDocument}
+        undoInDocument={undoInDocument}
+        redoInDocument={redoInDocument}
+        cutInDocument={cutInDocument}
+        copyInDocument={copyInDocument}
+        pasteInDocument={pasteInDocument}
         newFile={fileActions.newFile}
         saveFile={fileActions.saveFile}
         saveFileAs={fileActions.saveFileAs}
@@ -579,6 +667,10 @@ export default function Wisty() {
         setTextWrapEnabled={setTextWrapEnabled}
         applyThemeMode={applyThemeMode}
         themeMode={themeMode}
+        highlightSelectionMatchesEnabled={highlightSelectionMatchesEnabled}
+        setHighlightSelectionMatchesEnabled={setHighlightSelectionMatchesEnabled}
+        highlightCurrentLineEnabled={highlightCurrentLineEnabled}
+        setHighlightCurrentLineEnabled={setHighlightCurrentLineEnabled}
         statusBarVisible={statusBarVisible}
         setStatusBarVisible={setStatusBarVisible}
         statusBarStatsVisible={statusBarStatsVisible}

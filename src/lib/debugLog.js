@@ -15,9 +15,9 @@ export const DEBUG_LOG_CONFIG = {
     shutdown: true,
     editor: true,
     file: false,
-    settings: false,
+    settings: true,
     stats: false,
-    menu: false,
+    menu: true,
     font: false,
     log: true
   }

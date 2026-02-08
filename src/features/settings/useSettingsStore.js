@@ -47,6 +47,8 @@ export default function useSettingsStore(options) {
         const storedStatusBarFontSize = await settingsStore.get("statusBarFontSize");
         const storedTextWrap = await settingsStore.get("textWrapEnabled");
         const storedThemeMode = await settingsStore.get("themeMode");
+        const storedHighlightSelectionMatches = await settingsStore.get("highlightSelectionMatchesEnabled");
+        const storedHighlightCurrentLine = await settingsStore.get("highlightCurrentLineEnabled");
         const storedLastDirectory = await settingsStore.get("lastDirectory");
 
         if (typeof storedFontSize === "number" && Number.isFinite(storedFontSize)) {
@@ -83,6 +85,14 @@ export default function useSettingsStore(options) {
           const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
           options.applyThemeMode(prefersDark ? "dark" : "light");
           ddebug("settings", "applied system theme fallback", { prefersDark });
+        }
+        if (typeof storedHighlightSelectionMatches === "boolean") {
+          options.setHighlightSelectionMatchesEnabled(storedHighlightSelectionMatches);
+          ddebug("settings", "applied stored highlightSelectionMatchesEnabled", { storedHighlightSelectionMatches });
+        }
+        if (typeof storedHighlightCurrentLine === "boolean") {
+          options.setHighlightCurrentLineEnabled(storedHighlightCurrentLine);
+          ddebug("settings", "applied stored highlightCurrentLineEnabled", { storedHighlightCurrentLine });
         }
         if (typeof storedLastDirectory === "string") {
           setLastDirectory(storedLastDirectory);
@@ -125,6 +135,14 @@ export default function useSettingsStore(options) {
 
   createEffect(() => {
     saveSetting("themeMode", options.themeMode());
+  });
+
+  createEffect(() => {
+    saveSetting("highlightSelectionMatchesEnabled", options.highlightSelectionMatchesEnabled());
+  });
+
+  createEffect(() => {
+    saveSetting("highlightCurrentLineEnabled", options.highlightCurrentLineEnabled());
   });
 
   return {
