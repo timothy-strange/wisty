@@ -4,8 +4,8 @@ Wisty is a lightweight graphical text editor for Linux with a clean, modern look
 
 It is a fork of [Parchment](https://github.com/tywil04/parchment).
 
-![wisty light](images/wisty_light.png)
-![wisty dark](images/wisty_dark.png)
+![wisty light](images/wisty-light.png)
+![wisty dark](images/wisty-dark.png)
 
 I made wisty (or rather, got an AI to make it) because I wasn't happy with the visual style of any of the lightweight text editors out there. Also, I don't want a supposedly simple text editor which has extensive coding features. I just want an app where I can quickly and easily look at text documents or paste text temporarily, that looks good and opens quickly.
 

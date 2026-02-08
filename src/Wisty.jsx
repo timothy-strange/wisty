@@ -645,12 +645,23 @@ export default function Wisty() {
   });
 
   onMount(() => {
-    const handleFocus = () => dtrace("window", "focus event", { closeReqId: activeCloseRequestId() });
-    const handleBlur = () => dtrace("window", "blur event", { closeReqId: activeCloseRequestId() });
-    const handleVisibility = () => dtrace("window", "visibilitychange", {
-      closeReqId: activeCloseRequestId(),
-      visibilityState: document.visibilityState
-    });
+    const handleFocus = () => {
+      setMenuAltActive(false);
+      dtrace("window", "focus event", { closeReqId: activeCloseRequestId() });
+    };
+    const handleBlur = () => {
+      setMenuAltActive(false);
+      dtrace("window", "blur event", { closeReqId: activeCloseRequestId() });
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState !== "visible") {
+        setMenuAltActive(false);
+      }
+      dtrace("window", "visibilitychange", {
+        closeReqId: activeCloseRequestId(),
+        visibilityState: document.visibilityState
+      });
+    };
 
     window.addEventListener("focus", handleFocus);
     window.addEventListener("blur", handleBlur);

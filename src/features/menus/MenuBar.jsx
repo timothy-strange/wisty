@@ -23,6 +23,7 @@ const renderMenuLabel = (label, shortcutChar, menuAltActive) => {
 export default function MenuBar(props) {
   const menuOrder = ["file", "edit", "font", "settings", "app"];
   const subMenuPanel = "absolute left-full top-0 w-max rounded border border-gray-200 bg-white shadow-md dark:border-gray-700 dark:bg-gray-800 flex flex-col z-50";
+  const compactArrowButton = "flex h-5 w-5 items-center justify-center rounded bg-gray-200/80 text-gray-700 hover:bg-gray-300 active:bg-gray-400 focus:outline-none focus:ring-0 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 dark:active:bg-gray-500";
   const [activeItemIndex, setActiveItemIndex] = createSignal(0);
   const [openSubmenu, setOpenSubmenu] = createSignal("");
   const [activeSubItemIndex, setActiveSubItemIndex] = createSignal(0);
@@ -563,7 +564,7 @@ export default function MenuBar(props) {
                   onClick={() => openFindReplaceSubmenu("click-parent")}
                 >
                   <span>Find/Replace</span>
-                  <span className={`${menuArrow} pointer-events-none`} aria-hidden="true">
+                  <span className="pointer-events-none flex items-center text-gray-400 dark:text-gray-500" aria-hidden="true">
                     <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <polyline points="9 18 15 12 9 6" />
                     </svg>
@@ -574,7 +575,7 @@ export default function MenuBar(props) {
                     <div className={subRowClass(0)} onMouseEnter={() => setActiveSubItemIndex(0)}>
                       <span className="text-sm text-gray-700 dark:text-gray-200">Font</span>
                       <div className="flex items-center gap-2">
-                        <button className={menuArrow} onClick={() => props.adjustFindReplaceFontSize(-1)} aria-label="Decrease find replace font size">
+                        <button className={compactArrowButton} onClick={() => props.adjustFindReplaceFontSize(-1)} aria-label="Decrease find replace font size">
                           <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="15 18 9 12 15 6" />
                           </svg>
@@ -609,7 +610,7 @@ export default function MenuBar(props) {
                             {props.findReplaceFontSize()} px
                           </button>
                         }
-                        <button className={menuArrow} onClick={() => props.adjustFindReplaceFontSize(1)} aria-label="Increase find replace font size">
+                        <button className={compactArrowButton} onClick={() => props.adjustFindReplaceFontSize(1)} aria-label="Increase find replace font size">
                           <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="9 18 15 12 9 6" />
                           </svg>
@@ -627,7 +628,7 @@ export default function MenuBar(props) {
                   onClick={() => openStatusBarSubmenu("click-parent")}
                 >
                   <span>Status Bar</span>
-                  <span className={`${menuArrow} pointer-events-none`} aria-hidden="true">
+                  <span className="pointer-events-none flex items-center text-gray-400 dark:text-gray-500" aria-hidden="true">
                     <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <polyline points="9 18 15 12 9 6" />
                     </svg>
@@ -644,7 +645,7 @@ export default function MenuBar(props) {
                     <div className={subRowClass(2)} onMouseEnter={() => setActiveSubItemIndex(2)}>
                       <span className="text-sm text-gray-700 dark:text-gray-200">Font</span>
                       <div className="flex items-center gap-2">
-                        <button className={menuArrow} onClick={() => props.adjustStatusBarFontSize(-1)} aria-label="Decrease status bar font size">
+                        <button className={compactArrowButton} onClick={() => props.adjustStatusBarFontSize(-1)} aria-label="Decrease status bar font size">
                           <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="15 18 9 12 15 6" />
                           </svg>
@@ -679,7 +680,7 @@ export default function MenuBar(props) {
                             {props.statusBarFontSize()} px
                           </button>
                         }
-                        <button className={menuArrow} onClick={() => props.adjustStatusBarFontSize(1)} aria-label="Increase status bar font size">
+                        <button className={compactArrowButton} onClick={() => props.adjustStatusBarFontSize(1)} aria-label="Increase status bar font size">
                           <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="9 18 15 12 9 6" />
                           </svg>
