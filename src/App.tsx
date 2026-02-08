@@ -1,6 +1,7 @@
 import { createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { message } from "@tauri-apps/plugin-dialog";
+import { info } from "@tauri-apps/plugin-log";
 import "./App.css";
 import { ConfirmDiscardModal } from "./components/ConfirmDiscardModal";
 import { MenuBar } from "./components/MenuBar";
@@ -10,6 +11,8 @@ import { createDocumentStore } from "./core/document/documentStore";
 import { createEditorAdapter } from "./core/editor/editorAdapter";
 import { getDirectoryFromFilePath, openTextFile, saveTextFile, saveTextFileAs } from "./core/files/fileService";
 import { createSettingsStore } from "./core/settings/settingsStore";
+import { chooseEditorFont } from "./core/fonts/fontDialog";
+import { FONT_PRESETS } from "./core/settings/settingsTypes";
 
 type CloseFlowState = "idle" | "awaiting-discard" | "force-closing";
 
@@ -150,6 +153,27 @@ function App() {
     }, "Unable to complete action");
   };
 
+  const chooseEditorFontAction = async () => {
+    await withErrorMessage(async () => {
+      const selection = await chooseEditorFont({
+        fontFamily: settingsStore.state.fontFamily,
+        fontSize: settingsStore.state.fontSize,
+        fontStyle: settingsStore.state.fontStyle,
+        fontWeight: settingsStore.state.fontWeight
+      });
+      if (!selection) {
+        return;
+      }
+      void info(`[wisty] chooseEditorFont selection ${JSON.stringify(selection)}`).catch(() => {
+        // ignore logging transport failures
+      });
+      await settingsStore.actions.setFontFamily(selection.fontFamily);
+      await settingsStore.actions.setFontSize(selection.fontSize);
+      await settingsStore.actions.setFontStyle(selection.fontStyle);
+      await settingsStore.actions.setFontWeight(selection.fontWeight);
+    }, "Unable to choose font");
+  };
+
   const commandRegistry = createCommandRegistry([
     { id: "file.new", label: "New", shortcut: shortcut("N"), run: () => runOrConfirmDiscard(newAction) },
     { id: "file.open", label: "Open", shortcut: shortcut("O"), run: () => runOrConfirmDiscard(openAction) },
@@ -206,20 +230,25 @@ function App() {
     {
       id: "view.font.sans",
       label: "Font Sans",
-      run: () => settingsStore.actions.setFontFamily("sans"),
-      checked: () => settingsStore.state.fontFamily === "sans"
+      run: () => settingsStore.actions.setFontFamily(FONT_PRESETS.sans),
+      checked: () => settingsStore.state.fontFamily === FONT_PRESETS.sans
     },
     {
       id: "view.font.serif",
       label: "Font Serif",
-      run: () => settingsStore.actions.setFontFamily("serif"),
-      checked: () => settingsStore.state.fontFamily === "serif"
+      run: () => settingsStore.actions.setFontFamily(FONT_PRESETS.serif),
+      checked: () => settingsStore.state.fontFamily === FONT_PRESETS.serif
     },
     {
       id: "view.font.mono",
       label: "Font Mono",
-      run: () => settingsStore.actions.setFontFamily("mono"),
-      checked: () => settingsStore.state.fontFamily === "mono"
+      run: () => settingsStore.actions.setFontFamily(FONT_PRESETS.mono),
+      checked: () => settingsStore.state.fontFamily === FONT_PRESETS.mono
+    },
+    {
+      id: "view.font.browser",
+      label: "Choose Font...",
+      run: chooseEditorFontAction
     },
     {
       id: "help.about",
@@ -270,6 +299,8 @@ function App() {
         { type: "separator" },
         { type: "command", commandId: "view.font.minus" },
         { type: "command", commandId: "view.font.plus" },
+        { type: "command", commandId: "view.font.browser" },
+        { type: "separator" },
         { type: "command", commandId: "view.font.sans" },
         { type: "command", commandId: "view.font.serif" },
         { type: "command", commandId: "view.font.mono" }
@@ -387,6 +418,8 @@ function App() {
     document.documentElement.dataset.theme = settingsStore.state.themeMode;
     settingsStore.state.fontFamily;
     settingsStore.state.fontSize;
+    settingsStore.state.fontStyle;
+    settingsStore.state.fontWeight;
     settingsStore.state.textWrapEnabled;
     settingsStore.state.highlightCurrentLineEnabled;
     settingsStore.state.highlightSelectionMatchesEnabled;

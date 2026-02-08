@@ -1,7 +1,7 @@
 import { createStore } from "solid-js/store";
 import { createSignal } from "solid-js";
 import { Store } from "@tauri-apps/plugin-store";
-import { AppSettings, DEFAULT_SETTINGS, FontFamily, ThemeMode } from "./settingsTypes";
+import { AppSettings, DEFAULT_SETTINGS, FontStyle, ThemeMode } from "./settingsTypes";
 
 const SETTINGS_FILE = "settings.json";
 
@@ -9,7 +9,7 @@ const clamp = (value: number, min: number, max: number) => Math.min(max, Math.ma
 
 const isThemeMode = (value: unknown): value is ThemeMode => value === "light" || value === "dark";
 
-const isFontFamily = (value: unknown): value is FontFamily => value === "sans" || value === "serif" || value === "mono";
+const isFontStyle = (value: unknown): value is FontStyle => value === "normal" || value === "italic" || value === "oblique";
 
 type SettingKey = keyof AppSettings;
 
@@ -31,7 +31,7 @@ export const createSettingsStore = () => {
     await saveSetting("themeMode", themeMode);
   };
 
-  const setFontFamily = async (fontFamily: FontFamily) => {
+  const setFontFamily = async (fontFamily: string) => {
     setState({ fontFamily });
     await saveSetting("fontFamily", fontFamily);
   };
@@ -40,6 +40,17 @@ export const createSettingsStore = () => {
     const next = clamp(Math.round(fontSize), 9, 40);
     setState({ fontSize: next });
     await saveSetting("fontSize", next);
+  };
+
+  const setFontStyle = async (fontStyle: FontStyle) => {
+    setState({ fontStyle });
+    await saveSetting("fontStyle", fontStyle);
+  };
+
+  const setFontWeight = async (fontWeight: number) => {
+    const next = clamp(Math.round(fontWeight), 100, 900);
+    setState({ fontWeight: next });
+    await saveSetting("fontWeight", next);
   };
 
   const setTextWrapEnabled = async (enabled: boolean) => {
@@ -74,6 +85,8 @@ export const createSettingsStore = () => {
     const loadedThemeMode = await backingStore.get("themeMode");
     const loadedFontFamily = await backingStore.get("fontFamily");
     const loadedFontSize = await backingStore.get("fontSize");
+    const loadedFontStyle = await backingStore.get("fontStyle");
+    const loadedFontWeight = await backingStore.get("fontWeight");
     const loadedTextWrapEnabled = await backingStore.get("textWrapEnabled");
     const loadedHighlightCurrentLine = await backingStore.get("highlightCurrentLineEnabled");
     const loadedHighlightMatches = await backingStore.get("highlightSelectionMatchesEnabled");
@@ -84,8 +97,12 @@ export const createSettingsStore = () => {
 
     setState({
       themeMode: isThemeMode(loadedThemeMode) ? loadedThemeMode : (prefersDark ? "dark" : "light"),
-      fontFamily: isFontFamily(loadedFontFamily) ? loadedFontFamily : DEFAULT_SETTINGS.fontFamily,
+      fontFamily: typeof loadedFontFamily === "string" && loadedFontFamily.trim().length > 0
+        ? loadedFontFamily
+        : DEFAULT_SETTINGS.fontFamily,
       fontSize: typeof loadedFontSize === "number" ? clamp(loadedFontSize, 9, 40) : DEFAULT_SETTINGS.fontSize,
+      fontStyle: isFontStyle(loadedFontStyle) ? loadedFontStyle : DEFAULT_SETTINGS.fontStyle,
+      fontWeight: typeof loadedFontWeight === "number" ? clamp(loadedFontWeight, 100, 900) : DEFAULT_SETTINGS.fontWeight,
       textWrapEnabled: typeof loadedTextWrapEnabled === "boolean" ? loadedTextWrapEnabled : DEFAULT_SETTINGS.textWrapEnabled,
       highlightCurrentLineEnabled: typeof loadedHighlightCurrentLine === "boolean"
         ? loadedHighlightCurrentLine
@@ -110,6 +127,8 @@ export const createSettingsStore = () => {
       setThemeMode,
       setFontFamily,
       setFontSize,
+      setFontStyle,
+      setFontWeight,
       setTextWrapEnabled,
       setHighlightCurrentLineEnabled,
       setHighlightSelectionMatchesEnabled,

@@ -18,12 +18,6 @@ type SetTextOptions = {
   emitChange?: boolean;
 };
 
-const fontFamilyMap: Record<AppSettings["fontFamily"], string> = {
-  sans: "Noto Sans, Liberation Sans, sans-serif",
-  serif: "Noto Serif, Liberation Serif, serif",
-  mono: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace"
-};
-
 export const createEditorAdapter = (options: EditorAdapterOptions) => {
   let editorHost: HTMLDivElement | undefined;
   let editorView: EditorView | undefined;
@@ -44,13 +38,15 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
         height: "100%",
         color: isDark ? "#d7dfef" : "#1c2736",
         "background-color": isDark ? "#111925" : "#ffffff",
-        "font-family": fontFamilyMap[settings.fontFamily],
+        "font-family": settings.fontFamily,
         "font-size": `${settings.fontSize}px`
       },
       ".cm-content": {
         padding: "12px 14px",
         "min-height": "100%",
-        "font-family": fontFamilyMap[settings.fontFamily],
+        "font-family": settings.fontFamily,
+        "font-style": settings.fontStyle,
+        "font-weight": `${settings.fontWeight}`,
         caretColor: isDark ? "#8cb2ff" : "#2451c5"
       },
       ".cm-gutters": {
@@ -60,7 +56,9 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
       },
       ".cm-scroller": {
         overflow: "auto",
-        "font-family": fontFamilyMap[settings.fontFamily],
+        "font-family": settings.fontFamily,
+        "font-style": settings.fontStyle,
+        "font-weight": `${settings.fontWeight}`,
         "line-height": "1.55"
       },
       ".cm-activeLine": {
