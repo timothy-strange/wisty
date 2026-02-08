@@ -1,6 +1,38 @@
-node_modules
-dist
-src-tauri/gen/
-src-tauri/target/
+# Node
+node_modules/
+
+# Build output
+dist/
 dist-user/
-*.tar.gz
+
+# Logs
+*.log
+
+# Local environment
+.env
+.env.*
+
+# Legacy/reference artifacts
+legacy-reference/
+IMPROVEMENT_PLAN.md
+
+# Rust/Tauri build artifacts
+src-tauri/target/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Test artifacts
+coverage/
+.nyc_output/
+
+# Package manager logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor/OS files
+.DS_Store
+.idea/
+.vscode/

@@ -1,9 +1,8 @@
 {
   "name": "wisty",
-  "author": "Parchment by Tyler Williams (https://github.com/tywil04); Wisty fork by Timothy Strange (https://github.com/timothy-strange)",
-  "version": "1.0.0",
-  "description": "A simple text editor for Linux. A fork of Parchment updated to use Tauri 2.0 and libwebkit2gtk-4.1 for Ubuntu 24.04.",
-  "repository": "https://github.com/timothy-strange/wisty",
+  "version": "2.0.0",
+  "description": "Wisty v2 rewrite (Tauri + Solid + TypeScript)",
+  "type": "module",
   "scripts": {
     "start": "vite",
     "dev": "vite",
@@ -11,29 +10,16 @@
     "serve": "vite preview",
     "tauri": "tauri"
   },
-  "license": "GPL-3.0",
-  "devDependencies": {
-    "@tauri-apps/cli": "^2.10.0",
-    "autoprefixer": "^10.4.7",
-    "postcss": "^8.4.14",
-    "tailwindcss": "^3.1.3",
-    "vite": "^5",
-    "vite-plugin-solid": "^2.2.6"
-  },
+  "license": "MIT",
   "dependencies": {
-    "@codemirror/commands": "^6.10.2",
-    "@codemirror/search": "^6.6.0",
-    "@codemirror/state": "^6.5.4",
-    "@codemirror/view": "^6.39.12",
-    "@tauri-apps/api": "^2.10.1",
-    "@tauri-apps/plugin-clipboard-manager": "^2.3.2",
-    "@tauri-apps/plugin-dialog": "^2.6.0",
-    "@tauri-apps/plugin-fs": "^2.4.5",
-    "@tauri-apps/plugin-log": "^2.8.0",
-    "@tauri-apps/plugin-os": "^2.3.2",
-    "@tauri-apps/plugin-shell": "^2.3.5",
-    "@tauri-apps/plugin-store": "^2.4.2",
-    "codemirror": "^6.0.2",
-    "solid-js": "^1.4.2"
+    "solid-js": "^1.9.3",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-opener": "^2"
+  },
+  "devDependencies": {
+    "typescript": "~5.6.2",
+    "vite": "^6.0.3",
+    "vite-plugin-solid": "^2.11.0",
+    "@tauri-apps/cli": "^2"
   }
 }

@@ -1,70 +1,35 @@
 {
-  "$schema": "..\\node_modules/@tauri-apps/cli\\schema.json",
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "wisty",
+  "version": "2.0.0",
+  "identifier": "wisty-ts",
   "build": {
-    "beforeBuildCommand": "npm run build",
     "beforeDevCommand": "npm run dev",
-    "frontendDist": "../dist",
-    "devUrl": "http://localhost:5173"
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "wisty",
+        "width": 800,
+        "height": 600
+      }
+    ],
+    "security": {
+      "csp": null
+    }
   },
   "bundle": {
     "active": true,
-    "category": "Utility",
-    "copyright": "",
     "targets": "all",
-    "externalBin": [],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ],
-    "windows": {
-      "certificateThumbprint": null,
-      "digestAlgorithm": "sha256",
-      "timestampUrl": ""
-    },
-    "longDescription": "",
-    "macOS": {
-      "entitlements": null,
-      "exceptionDomain": "",
-      "frameworks": [],
-      "providerShortName": null,
-      "signingIdentity": null
-    },
-    "resources": [],
-    "shortDescription": "",
-    "linux": {
-      "deb": {
-        "depends": []
-      }
-    }
-  },
-  "productName": "wisty",
-  "mainBinaryName": "wisty",
-  "version": "1.0.0",
-  "identifier": "wisty-ts",
-  "plugins": {},
-  "app": {
-    "windows": [
-      {
-        "fullscreen": false,
-        "height": 650,
-        "minHeight": 240,
-        "minWidth": 400,
-        "resizable": true,
-        "title": "wisty",
-        "width": 800,
-        "center": true,
-        "decorations": true,
-        "transparent": false,
-        "useHttpsScheme": true
-      }
-    ],
-    "security": {
-      "csp": "default-src 'self' blob: data: filesystem: ws: wss: http: https: tauri:; img-src 'self' data: blob: http: https:; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost",
-      "devCsp": "default-src blob: data: filesystem: ws: wss: http: https: tauri: 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' blob: data: http: https:; style-src 'self' 'unsafe-inline' http: https:; img-src 'self' data: blob: http: https:; connect-src ipc: http://ipc.localhost ws: wss: http: https:;"
-    },
-    "macOSPrivateApi": true
+    ]
   }
 }
