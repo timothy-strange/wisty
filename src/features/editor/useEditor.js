@@ -9,6 +9,7 @@ import {
 } from "@codemirror/view";
 import { highlightSelectionMatches, openSearchPanel, search, searchKeymap } from "@codemirror/search";
 import { defaultKeymap, history, historyKeymap, redo, undo } from "@codemirror/commands";
+import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { ddebug, derror, dinfo, dtrace } from "../../lib/debugLog";
 import { buildEditorTheme } from "../../lib/theme";
 
@@ -98,13 +99,53 @@ export default function useEditor(options) {
     return opened;
   };
 
-  const runDocumentCommand = (command) => {
+  const selectedText = () => {
     if (!editorView) {
+      return "";
+    }
+    const ranges = editorView.state.selection.ranges.filter((range) => !range.empty);
+    if (ranges.length === 0) {
+      return "";
+    }
+    return ranges.map((range) => editorView.state.sliceDoc(range.from, range.to)).join("\n");
+  };
+
+  const copySelection = async () => {
+    if (!editorView) {
+      return false;
+    }
+    const text = selectedText();
+    if (text === "") {
+      return false;
+    }
+    await writeText(text);
+    return true;
+  };
+
+  const cutSelection = async () => {
+    if (!editorView) {
+      return false;
+    }
+    const copied = await copySelection();
+    if (!copied) {
+      return false;
+    }
+    editorView.dispatch(editorView.state.replaceSelection(""));
+    return true;
+  };
+
+  const pasteSelection = async () => {
+    if (!editorView) {
+      return false;
+    }
+    const text = await readText();
+    if (!text) {
       return false;
     }
     editorView.focus();
     try {
-      return Boolean(document.execCommand(command));
+      editorView.dispatch(editorView.state.replaceSelection(text));
+      return true;
     } catch {
       return false;
     }
@@ -251,9 +292,9 @@ export default function useEditor(options) {
     setEditorText,
     openFindPanel,
     openReplacePanel,
-    cutSelection: () => runDocumentCommand("cut"),
-    copySelection: () => runDocumentCommand("copy"),
-    pasteSelection: () => runDocumentCommand("paste"),
+    cutSelection,
+    copySelection,
+    pasteSelection,
     undoEdit,
     redoEdit
   };

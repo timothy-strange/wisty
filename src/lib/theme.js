@@ -26,10 +26,13 @@ export const buildEditorTheme = (EditorView, options) => EditorView.theme({
     fontSize: `${options.fontSize}px`
   },
   ".cm-selectionBackground": {
-    backgroundColor: options.themeMode === "dark" ? "rgba(59,130,246,0.38)" : "rgba(147,197,253,0.55)"
+    background: options.themeMode === "dark" ? "rgba(59,130,246,0.38)" : "rgba(147,197,253,0.55)"
+  },
+  "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground": {
+    background: options.themeMode === "dark" ? "rgba(59,130,246,0.38)" : "rgba(147,197,253,0.55)"
   },
   ".cm-content ::selection": {
-    backgroundColor: options.themeMode === "dark" ? "rgba(59,130,246,0.38)" : "rgba(147,197,253,0.55)"
+    background: options.themeMode === "dark" ? "rgba(59,130,246,0.38)" : "rgba(147,197,253,0.55)"
   },
   ".cm-activeLine": {
     backgroundColor: options.highlightCurrentLineEnabled

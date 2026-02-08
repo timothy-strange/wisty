@@ -54,9 +54,9 @@ export default function Wisty() {
     setEditorText: () => {},
     openFindPanel: () => false,
     openReplacePanel: () => false,
-    cutSelection: () => false,
-    copySelection: () => false,
-    pasteSelection: () => false,
+    cutSelection: async () => false,
+    copySelection: async () => false,
+    pasteSelection: async () => false,
     undoEdit: () => false,
     redoEdit: () => false
   };
@@ -233,31 +233,48 @@ export default function Wisty() {
   const undoInDocument = () => {
     const handled = editorApi.undoEdit();
     ddebug("shortcut", "undo requested from menu", { handled });
+    editorApi.focusEditor();
     return handled;
   };
 
   const redoInDocument = () => {
     const handled = editorApi.redoEdit();
     ddebug("shortcut", "redo requested from menu", { handled });
+    editorApi.focusEditor();
     return handled;
   };
 
   const cutInDocument = () => {
-    const handled = editorApi.cutSelection();
-    ddebug("shortcut", "cut requested from menu", { handled });
-    return handled;
+    void editorApi.cutSelection().then((handled) => {
+      ddebug("shortcut", "cut requested from menu", { handled });
+      editorApi.focusEditor();
+    }, () => {
+      ddebug("shortcut", "cut requested from menu", { handled: false });
+      editorApi.focusEditor();
+    });
+    return true;
   };
 
   const copyInDocument = () => {
-    const handled = editorApi.copySelection();
-    ddebug("shortcut", "copy requested from menu", { handled });
-    return handled;
+    void editorApi.copySelection().then((handled) => {
+      ddebug("shortcut", "copy requested from menu", { handled });
+      editorApi.focusEditor();
+    }, () => {
+      ddebug("shortcut", "copy requested from menu", { handled: false });
+      editorApi.focusEditor();
+    });
+    return true;
   };
 
   const pasteInDocument = () => {
-    const handled = editorApi.pasteSelection();
-    ddebug("shortcut", "paste requested from menu", { handled });
-    return handled;
+    void editorApi.pasteSelection().then((handled) => {
+      ddebug("shortcut", "paste requested from menu", { handled });
+      editorApi.focusEditor();
+    }, () => {
+      ddebug("shortcut", "paste requested from menu", { handled: false });
+      editorApi.focusEditor();
+    });
+    return true;
   };
 
   const { lastDirectory, recordLastDirectory } = useSettingsStore({

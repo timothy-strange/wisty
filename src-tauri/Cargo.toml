@@ -25,6 +25,7 @@ tauri-plugin-fs = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-log = "2"
 tauri-plugin-store = "2"
+tauri-plugin-clipboard-manager = "2"
 
 [features]
 # by default Tauri runs in production mode
