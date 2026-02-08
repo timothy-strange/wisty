@@ -26,6 +26,9 @@
     "dialog:allow-open",
     "dialog:allow-save",
     "dialog:allow-message",
+    "store:default",
+    "clipboard-manager:allow-read-text",
+    "clipboard-manager:allow-write-text",
     "opener:default"
   ]
 }

@@ -1,10 +1,35 @@
 :root {
-  font-family: "Noto Sans", "Liberation Sans", sans-serif;
-  color: #1d2733;
-  background: linear-gradient(160deg, #f5f7fb 0%, #eef2f9 100%);
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  --font-ui: "Noto Sans", "Liberation Sans", sans-serif;
+  --font-menu: ui-sans-serif, system-ui, sans-serif;
+  --bg-page: #f7f9fd;
+  --text-main: #182538;
+  --panel-bg: #ffffff;
+  --panel-border: #d2deef;
+  --menu-item-hover: #f3f4f6;
+  --menu-popover: #ffffff;
+  --menu-trigger-hover: #e5e7eb;
+  --menu-bar-bg: rgb(243 244 246 / 70%);
+  --menu-shortcut: #9ca3af;
+  --menu-text: #000000;
+  --menu-border: #e5e7eb;
+  --status-text: #4f637e;
+  --modified: #b14e4d;
+}
+
+:root[data-theme="dark"] {
+  --bg-page: #101827;
+  --text-main: #d5e1f0;
+  --panel-bg: #152130;
+  --panel-border: #2f3e53;
+  --menu-item-hover: #374151;
+  --menu-popover: #1f2937;
+  --menu-trigger-hover: #374151;
+  --menu-bar-bg: rgb(31 41 55 / 70%);
+  --menu-shortcut: #6b7280;
+  --menu-text: #ffffff;
+  --menu-border: #374151;
+  --status-text: #9fb3ce;
+  --modified: #e49392;
 }
 
 * {
@@ -17,77 +42,118 @@ body,
   margin: 0;
   width: 100%;
   height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-ui);
+  color: var(--text-main);
+  background: var(--bg-page);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .app-shell {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   height: 100%;
-  padding: 10px;
-  gap: 10px;
+  gap: 0;
+  padding: 0;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
 }
 
-.toolbar {
+.menu-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--menu-border);
+  background: var(--menu-bar-bg);
+}
+
+.menu-section {
+  position: relative;
+}
+
+.menu-trigger {
+  font-family: var(--font-menu);
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--menu-text);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.menu-trigger:hover,
+.menu-trigger.open {
+  background: var(--menu-trigger-hover);
+}
+
+.menu-popover {
+  position: absolute;
+  top: calc(100% + 1px);
+  left: 0;
+  min-width: 236px;
+  padding: 4px 0;
+  border: 1px solid var(--menu-border);
+  border-radius: 4px;
+  background: var(--menu-popover);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.14);
+  z-index: 40;
+}
+
+.menu-item {
+  font-family: var(--font-menu);
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--menu-text);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  min-height: 48px;
-  padding: 8px;
-  border: 1px solid #d4dcea;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(6px);
-}
-
-.toolbar-left {
-  display: flex;
-  gap: 8px;
-}
-
-.toolbar-right {
-  color: #66758c;
-  font-size: 12px;
-}
-
-.shortcut-hint {
-  white-space: nowrap;
-}
-
-.button {
-  border: 1px solid #b7c5dc;
-  background: #ffffff;
-  color: #243042;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
+  gap: 24px;
+  border-radius: 0;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  text-align: left;
   padding: 6px 12px;
   cursor: pointer;
 }
 
-.button:hover {
-  background: #f0f5ff;
+.menu-item:hover:not(:disabled),
+.menu-item:focus-visible:not(:disabled) {
+  background: var(--menu-item-hover);
+  outline: none;
 }
 
-.button:active {
-  transform: translateY(1px);
+.menu-item:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
-.button.subtle {
-  font-weight: 500;
+.menu-item-shortcut {
+  font-size: 14px;
+  color: var(--menu-shortcut);
 }
 
-.button.danger {
-  border-color: #cf7a79;
-  background: #ffe1df;
-  color: #7a1e1d;
+.menu-separator {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--panel-border);
 }
 
 .editor-shell {
   min-height: 0;
-  border: 1px solid #d4dcea;
-  border-radius: 10px;
   overflow: hidden;
-  background: #ffffff;
+  background: var(--menu-popover);
 }
 
 .editor-host {
@@ -99,13 +165,12 @@ body,
   display: flex;
   justify-content: flex-start;
   align-items: center;
-  border: 1px solid #d4dcea;
-  border-radius: 10px;
-  min-height: 34px;
+  min-height: 32px;
   padding: 0 10px;
-  background: rgba(255, 255, 255, 0.85);
+  border-top: 1px solid var(--panel-border);
+  background: var(--panel-bg);
+  color: var(--status-text);
   font-size: 12px;
-  color: #4b5e78;
 }
 
 .status-left {
@@ -115,15 +180,44 @@ body,
 }
 
 .status-left span:first-child {
+  max-width: 80vw;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 80vw;
 }
 
 .status-dirty {
-  color: #b45b5a;
+  color: var(--modified);
+  font-weight: 700;
+}
+
+.button {
+  border: 1px solid #b8c7df;
+  background: #ffffff;
+  color: #253149;
+  border-radius: 4px;
+  font-size: 13px;
   font-weight: 600;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.button.subtle {
+  background: transparent;
+}
+
+.button.danger {
+  border-color: #dc2626;
+  background: #ef4444;
+  color: #ffffff;
+}
+
+.button.danger:hover {
+  background: #dc2626;
+}
+
+.button.danger:active {
+  background: #b91c1c;
 }
 
 .modal-backdrop {
@@ -132,14 +226,16 @@ body,
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(12, 20, 31, 0.46);
+  background: rgba(9, 14, 20, 0.5);
 }
 
 .modal-panel {
-  width: min(420px, 92vw);
-  border: 1px solid #c7d4eb;
-  border-radius: 12px;
-  background: #ffffff;
+  width: 360px;
+  max-width: 92vw;
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  background: var(--menu-popover);
+  color: var(--text-main);
   padding: 16px;
 }
 
@@ -150,7 +246,6 @@ body,
 
 .modal-panel p {
   margin: 10px 0 0;
-  color: #4e5f75;
 }
 
 .modal-actions {
@@ -160,26 +255,17 @@ body,
   margin-top: 16px;
 }
 
-@media (max-width: 680px) {
+@media (max-width: 700px) {
   .app-shell {
-    padding: 8px;
-    gap: 8px;
+    padding: 0;
+    gap: 0;
   }
 
-  .toolbar {
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .toolbar-left {
-    flex-wrap: wrap;
-  }
-
-  .shortcut-hint {
-    font-size: 11px;
+  .menu-popover {
+    min-width: 205px;
   }
 
   .status-left span:first-child {
-    max-width: 72vw;
+    max-width: 68vw;
   }
 }
