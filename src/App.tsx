@@ -385,6 +385,12 @@ function App() {
 
   createEffect(() => {
     document.documentElement.dataset.theme = settingsStore.state.themeMode;
+    settingsStore.state.fontFamily;
+    settingsStore.state.fontSize;
+    settingsStore.state.textWrapEnabled;
+    settingsStore.state.highlightCurrentLineEnabled;
+    settingsStore.state.highlightSelectionMatchesEnabled;
+    settingsStore.state.findReplaceFontSize;
     editorAdapter.applySettings();
   });
 

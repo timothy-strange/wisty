@@ -50,6 +50,7 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
       ".cm-content": {
         padding: "12px 14px",
         "min-height": "100%",
+        "font-family": fontFamilyMap[settings.fontFamily],
         caretColor: isDark ? "#8cb2ff" : "#2451c5"
       },
       ".cm-gutters": {
@@ -59,6 +60,7 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
       },
       ".cm-scroller": {
         overflow: "auto",
+        "font-family": fontFamilyMap[settings.fontFamily],
         "line-height": "1.55"
       },
       ".cm-activeLine": {
