@@ -11,9 +11,11 @@ export const fontFamilyForClass = (value) => {
 export const buildEditorTheme = (EditorView, options) => EditorView.theme({
   "&": {
     height: "100%",
+    minHeight: "100%",
     backgroundColor: "transparent",
     color: "inherit",
-    lineHeight: "1.4"
+    lineHeight: "1.4",
+    outline: "none"
   },
   ".cm-scroller": {
     overflow: "auto",

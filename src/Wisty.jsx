@@ -109,8 +109,16 @@ export default function Wisty() {
   };
 
   const toggleMenu = (menuName) => {
-    setOpenMenu(openMenu() === menuName ? "" : menuName);
-    ddebug("menu", "toggleMenu", { menuName, previous: openMenu() });
+    const previous = openMenu();
+    const next = previous === menuName ? "" : menuName;
+    setOpenMenu(next);
+    if (next === "") {
+      setFontSizeEditing(false);
+      setStatusBarFontSizeEditing(false);
+      setFindReplaceFontSizeEditing(false);
+      editorApi.focusEditor();
+    }
+    ddebug("menu", "toggleMenu", { menuName, previous, next });
   };
 
   const switchMenuOnHover = (menuName) => {
@@ -127,7 +135,11 @@ export default function Wisty() {
     if (menuBar && event.relatedTarget && menuBar.contains(event.relatedTarget)) {
       return;
     }
+    if (openMenu() === "") {
+      return;
+    }
     closeMenu();
+    editorApi.focusEditor();
   };
 
   const adjustFontSize = (delta) => {

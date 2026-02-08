@@ -1,18 +1,10 @@
-# wisty
+# Wisty
 
-wisty is a desktop editor for plain text. It is not designed to be a code editor.
+Wisty is a lightweight graphical text editor for Linux with a clean, modern look, intended for plain text editing. It is NOT intended for coding.
 
-It is a fork of [Parchment](https://github.com/tywil04/parchment), updated to use Tauri 2 and WebKitGTK 4.1.
+It is a fork of [Parchment](https://github.com/tywil04/parchment).
 
-## What wisty is for
-
-- plain text notes and documents
-- simple editing with file open/save, search/replace, and customizable UI settings
-
-## What wisty is not for
-
-- language-aware code editing
-- IDE-style tooling (linting, code intelligence, project navigation)
+I made wisty (or rather, got an AI to make it) because I wasn't happy with the visual style of any of the lightweight text editors out there. Also, I don't want a "simple" text editor which has extensive coding features. I just want an app where I can quickly and easily look at text documents or paste text temporarily, that looks good and opens quickly.
 
 ## Build and run
 

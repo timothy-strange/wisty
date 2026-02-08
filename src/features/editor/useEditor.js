@@ -43,6 +43,34 @@ export default function useEditor(options) {
     findReplaceFontSize: options.findReplaceFontSize()
   });
 
+  const probeEditorLayout = (phase) => {
+    if (!editorHost) {
+      return;
+    }
+    const editorEl = editorHost.querySelector(".cm-editor");
+    const scrollerEl = editorHost.querySelector(".cm-scroller");
+    const contentEl = editorHost.querySelector(".cm-content");
+    if (!editorEl || !scrollerEl || !contentEl) {
+      ddebug("editor", "layout probe missing nodes", { phase, hasEditor: Boolean(editorEl), hasScroller: Boolean(scrollerEl), hasContent: Boolean(contentEl) });
+      return;
+    }
+    const editorStyle = window.getComputedStyle(editorEl);
+    const scrollerStyle = window.getComputedStyle(scrollerEl);
+    const contentStyle = window.getComputedStyle(contentEl);
+    ddebug("editor", "layout probe", {
+      phase,
+      editorHeight: editorStyle.height,
+      scrollerHeight: scrollerStyle.height,
+      contentMinHeight: contentStyle.minHeight,
+      contentPaddingTop: contentStyle.paddingTop,
+      contentPaddingBottom: contentStyle.paddingBottom,
+      hostClientHeight: editorHost.clientHeight,
+      editorClientHeight: editorEl.clientHeight,
+      scrollerClientHeight: scrollerEl.clientHeight,
+      contentClientHeight: contentEl.clientHeight
+    });
+  };
+
   const focusEditor = () => {
     if (editorView) {
       editorView.focus();
@@ -202,6 +230,7 @@ export default function useEditor(options) {
       });
       dinfo("editor", "editor initialized successfully");
       options.onDocChanged();
+      queueMicrotask(() => probeEditorLayout("post-init"));
       setTimeout(() => focusEditor(), 0);
     } catch (err) {
       derror("editor", "editor initialization failed", { error: String(err) });
@@ -244,6 +273,7 @@ export default function useEditor(options) {
     editorView.dispatch({
       effects: themeCompartment.reconfigure(buildThemeExtension())
     });
+    queueMicrotask(() => probeEditorLayout("post-theme-reconfigure"));
     dtrace("editor", "theme reconfigured", {
       themeMode: options.themeMode(),
       textFontClass: options.textFontClass(),
