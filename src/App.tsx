@@ -1,8 +1,10 @@
 import { createEffect, createSignal, onCleanup, onMount } from "solid-js";
+import { getVersion } from "@tauri-apps/api/app";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { message } from "@tauri-apps/plugin-dialog";
 import { info } from "@tauri-apps/plugin-log";
 import "./App.css";
+import { AboutDialog } from "./components/AboutDialog";
 import { ConfirmDiscardModal } from "./components/ConfirmDiscardModal";
 import { MenuBar } from "./components/MenuBar";
 import { StatusBar } from "./components/StatusBar";
@@ -27,6 +29,8 @@ function App() {
   const documentStore = createDocumentStore();
   const settingsStore = createSettingsStore();
   const menuState = useMenuState();
+  const [aboutOpen, setAboutOpen] = createSignal(false);
+  const [appVersion, setAppVersion] = createSignal("2.0.0");
 
   let editorHostRef: HTMLDivElement | undefined;
   let unlistenCloseRequest: (() => void) | undefined;
@@ -78,7 +82,7 @@ function App() {
     editor: editorAdapter,
     settings: settingsStore,
     showAbout: async () => {
-      await message("Wisty v2\nTauri + SolidJS + TypeScript");
+      setAboutOpen(true);
     }
   });
 
@@ -164,6 +168,10 @@ function App() {
   };
 
   const handleGlobalKeydown = (event: KeyboardEvent) => {
+    if (aboutOpen()) {
+      return;
+    }
+
     if (closeFlow.confirmDiscardOpen()) {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -203,6 +211,12 @@ function App() {
       editorAdapter.applySettings();
     }).catch(async (error) => {
       await message(`Unable to load settings: ${String(error)}`);
+    });
+
+    void getVersion().then((version) => {
+      setAppVersion(version);
+    }).catch(() => {
+      // keep fallback version
     });
 
     void appWindow.onCloseRequested((event) => {
@@ -262,6 +276,15 @@ function App() {
             open={closeFlow.confirmDiscardOpen()}
             onCancel={() => void closeFlow.resolveConfirmDiscard(false)}
             onDiscard={() => void closeFlow.resolveConfirmDiscard(true)}
+          />
+
+          <AboutDialog
+            open={aboutOpen()}
+            version={appVersion()}
+            onClose={() => {
+              setAboutOpen(false);
+              editorAdapter.focus();
+            }}
           />
         </main>
       </MenuProvider>
