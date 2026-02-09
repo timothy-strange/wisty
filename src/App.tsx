@@ -10,6 +10,7 @@ import { createCommandRegistry } from "./core/commands/commandRegistry";
 import { buildCommands } from "./core/commands/buildCommands";
 import { createShortcutRouter } from "./core/commands/shortcutRouter";
 import type { ErrorReporter } from "./core/app/contracts";
+import { CommandsProvider, MenuProvider } from "./core/app/appContexts";
 import { useCloseFlow } from "./core/app/useCloseFlow";
 import { useFileLifecycle } from "./core/app/useFileLifecycle";
 import { useMenuState } from "./core/app/useMenuState";
@@ -148,6 +149,20 @@ function App() {
     execute: (commandId) => commandRegistry.execute(commandId)
   });
 
+  const commandsContextValue = {
+    sections,
+    registry: commandRegistry
+  };
+
+  const menuContextValue = {
+    activeMenuId: menuState.activeMenuId,
+    onActiveMenuIdChange: menuState.setActiveMenuId,
+    menuPanelOpen: menuState.menuPanelOpen,
+    onMenuPanelOpenChange: handleMenuPanelOpenChange,
+    onMenuCommandSelected: handleMenuCommandSelected,
+    onRequestEditorFocus: () => editorAdapter.focus()
+  };
+
   const handleGlobalKeydown = (event: KeyboardEvent) => {
     if (closeFlow.confirmDiscardOpen()) {
       if (event.key === "Escape") {
@@ -228,34 +243,29 @@ function App() {
   });
 
   return (
-    <main class="app-shell">
-      <MenuBar
-        sections={sections}
-        registry={commandRegistry}
-        activeMenuId={menuState.activeMenuId()}
-        onActiveMenuIdChange={menuState.setActiveMenuId}
-        menuPanelOpen={menuState.menuPanelOpen()}
-        onMenuPanelOpenChange={handleMenuPanelOpenChange}
-        onMenuCommandSelected={handleMenuCommandSelected}
-        onRequestEditorFocus={() => editorAdapter.focus()}
-      />
+    <CommandsProvider value={commandsContextValue}>
+      <MenuProvider value={menuContextValue}>
+        <main class="app-shell">
+          <MenuBar />
 
-      <section class="editor-shell">
-        <div ref={editorHostRef} class="editor-host" />
-      </section>
+          <section class="editor-shell">
+            <div ref={editorHostRef} class="editor-host" />
+          </section>
 
-      <StatusBar
-        filePath={documentStore.state.filePath}
-        fileName={documentStore.state.fileName}
-        isDirty={documentStore.state.isDirty}
-      />
+          <StatusBar
+            filePath={documentStore.state.filePath}
+            fileName={documentStore.state.fileName}
+            isDirty={documentStore.state.isDirty}
+          />
 
-      <ConfirmDiscardModal
-        open={closeFlow.confirmDiscardOpen()}
-        onCancel={() => void closeFlow.resolveConfirmDiscard(false)}
-        onDiscard={() => void closeFlow.resolveConfirmDiscard(true)}
-      />
-    </main>
+          <ConfirmDiscardModal
+            open={closeFlow.confirmDiscardOpen()}
+            onCancel={() => void closeFlow.resolveConfirmDiscard(false)}
+            onDiscard={() => void closeFlow.resolveConfirmDiscard(true)}
+          />
+        </main>
+      </MenuProvider>
+    </CommandsProvider>
   );
 }
 

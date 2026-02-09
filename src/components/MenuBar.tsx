@@ -8,18 +8,8 @@ import {
   Item as MenubarItem,
   Separator as MenubarSeparator
 } from "@kobalte/core/menubar";
-import { CommandDefinition, MenuSection, createCommandRegistry } from "../core/commands/commandRegistry";
-
-type MenuBarProps = {
-  sections: MenuSection[];
-  registry: ReturnType<typeof createCommandRegistry>;
-  activeMenuId: string | null;
-  onActiveMenuIdChange: (value: string | null) => void;
-  menuPanelOpen: boolean;
-  onMenuPanelOpenChange: (value: boolean) => void;
-  onMenuCommandSelected: (commandId: string) => void;
-  onRequestEditorFocus: () => void;
-};
+import { useCommandsContext, useMenuContext } from "../core/app/appContexts";
+import { CommandDefinition } from "../core/commands/commandRegistry";
 
 const commandLabel = (definition: CommandDefinition) => {
   if (!definition.checked) {
@@ -28,7 +18,9 @@ const commandLabel = (definition: CommandDefinition) => {
   return `${definition.label}${definition.checked() ? " ✓" : ""}`;
 };
 
-export const MenuBar = (props: MenuBarProps) => {
+export const MenuBar = () => {
+  const commands = useCommandsContext();
+  const menu = useMenuContext();
   let closeReason: "none" | "escape" = "none";
 
   return (
@@ -36,24 +28,24 @@ export const MenuBar = (props: MenuBarProps) => {
       class="menu-bar"
       role="menubar"
       aria-label="Application menu"
-      value={props.activeMenuId ?? undefined}
+      value={menu.activeMenuId() ?? undefined}
       onValueChange={(value) => {
-        props.onActiveMenuIdChange(value ?? null);
+        menu.onActiveMenuIdChange(value ?? null);
         if (value == null) {
-          props.onMenuPanelOpenChange(false);
+          menu.onMenuPanelOpenChange(false);
         }
       }}
-      autoFocusMenu={props.menuPanelOpen}
+      autoFocusMenu={menu.menuPanelOpen()}
       onAutoFocusMenuChange={(isOpen) => {
         const nextOpen = Boolean(isOpen);
-        props.onMenuPanelOpenChange(nextOpen);
+        menu.onMenuPanelOpenChange(nextOpen);
         if (!nextOpen) {
-          props.onActiveMenuIdChange(null);
+          menu.onActiveMenuIdChange(null);
         }
       }}
       loop
     >
-      <For each={props.sections}>
+      <For each={commands.sections}>
         {(section) => (
           <MenubarMenu value={section.id}>
             <MenubarTrigger class="menu-trigger">
@@ -69,9 +61,9 @@ export const MenuBar = (props: MenuBarProps) => {
                   if (closeReason === "escape") {
                     closeReason = "none";
                     event.preventDefault();
-                    props.onActiveMenuIdChange(null);
-                    props.onMenuPanelOpenChange(false);
-                    props.onRequestEditorFocus();
+                    menu.onActiveMenuIdChange(null);
+                    menu.onMenuPanelOpenChange(false);
+                    menu.onRequestEditorFocus();
                     return;
                   }
                   closeReason = "none";
@@ -82,7 +74,7 @@ export const MenuBar = (props: MenuBarProps) => {
                     if (item.type === "separator") {
                       return <MenubarSeparator class="menu-separator" />;
                     }
-                    const command = props.registry.get(item.commandId);
+                    const command = commands.registry.get(item.commandId);
                     if (!command) {
                       return null;
                     }
@@ -93,7 +85,7 @@ export const MenuBar = (props: MenuBarProps) => {
                         class="menu-item"
                         disabled={!enabled}
                         onSelect={() => {
-                          props.onMenuCommandSelected(command.id);
+                          menu.onMenuCommandSelected(command.id);
                         }}
                       >
                         <span class="menu-item-label">{commandLabel(command)}</span>

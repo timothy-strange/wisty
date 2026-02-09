@@ -21,7 +21,13 @@ export type MenuSection = {
   items: MenuItem[];
 };
 
-export const createCommandRegistry = (definitions: CommandDefinition[]) => {
+export type CommandRegistry = {
+  definitions: CommandDefinition[];
+  get: (id: string) => CommandDefinition | undefined;
+  execute: (id: string) => Promise<boolean>;
+};
+
+export const createCommandRegistry = (definitions: CommandDefinition[]): CommandRegistry => {
   const commandMap = new Map(definitions.map((definition) => [definition.id, definition]));
 
   const get = (id: string) => commandMap.get(id);

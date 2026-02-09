@@ -1,5 +1,5 @@
-import { Compartment, EditorState } from "@codemirror/state";
-import { defaultKeymap, history, historyKeymap, redo, undo } from "@codemirror/commands";
+import { Compartment, EditorState, Transaction } from "@codemirror/state";
+import { defaultKeymap, history, isolateHistory, redo, undo } from "@codemirror/commands";
 import { highlightSelectionMatches, search, searchKeymap } from "@codemirror/search";
 import { drawSelection, dropCursor, EditorView, highlightActiveLine, keymap } from "@codemirror/view";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
@@ -142,6 +142,38 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
     }
 
     const settings = options.getSettings();
+    const historyBoundaryExtension = EditorState.transactionExtender.of((tr) => {
+      if (!tr.docChanged) {
+        return null;
+      }
+      if (tr.isUserEvent("undo") || tr.isUserEvent("redo")) {
+        return null;
+      }
+
+      if (tr.isUserEvent("delete.cut") || tr.isUserEvent("input.paste")) {
+        return { annotations: isolateHistory.of("full") };
+      }
+
+      if (!tr.isUserEvent("input.type")) {
+        return null;
+      }
+
+      let crossedWordBoundary = false;
+      tr.changes.iterChanges((_fromA, _toA, _fromB, _toB, inserted) => {
+        if (crossedWordBoundary) {
+          return;
+        }
+        if (/[\s.,;:!?()[\]{}]/.test(inserted.toString())) {
+          crossedWordBoundary = true;
+        }
+      });
+
+      if (!crossedWordBoundary) {
+        return null;
+      }
+
+      return { annotations: isolateHistory.of("after") };
+    });
 
     editorView = new EditorView({
       parent: editorHost,
@@ -149,12 +181,20 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
         doc: "",
         extensions: [
           search(),
-          history(),
+          history({
+            newGroupDelay: 150,
+            joinToEvent: (tr, isAdjacent) => {
+              if (!isAdjacent) {
+                return false;
+              }
+              return tr.isUserEvent("input.type") || tr.isUserEvent("delete.backward") || tr.isUserEvent("delete.forward");
+            }
+          }),
+          historyBoundaryExtension,
           drawSelection(),
           dropCursor(),
           keymap.of([
             ...defaultKeymap,
-            ...historyKeymap,
             ...searchKeymap.filter((binding) => binding.key !== "Mod-f")
           ]),
           wrapCompartment.of(settings.textWrapEnabled ? EditorView.lineWrapping : []),
@@ -274,7 +314,14 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
     if (!copied) {
       return false;
     }
-    view.dispatch(view.state.replaceSelection(""));
+    view.dispatch({
+      ...view.state.replaceSelection(""),
+      userEvent: "delete.cut",
+      annotations: [
+        Transaction.addToHistory.of(true),
+        isolateHistory.of("full")
+      ]
+    });
     return true;
   };
 
@@ -287,7 +334,14 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
     if (!text) {
       return false;
     }
-    view.dispatch(view.state.replaceSelection(text));
+    view.dispatch({
+      ...view.state.replaceSelection(text),
+      userEvent: "input.paste",
+      annotations: [
+        Transaction.addToHistory.of(true),
+        isolateHistory.of("full")
+      ]
+    });
     return true;
   };
 
