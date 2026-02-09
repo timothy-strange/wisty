@@ -12,6 +12,7 @@
   --menu-shortcut: #9ca3af;
   --menu-text: #000000;
   --menu-border: #e5e7eb;
+  --menu-separator: #e4eaf2;
   --status-text: #4f637e;
   --modified: #b14e4d;
 }
@@ -28,6 +29,7 @@
   --menu-shortcut: #6b7280;
   --menu-text: #ffffff;
   --menu-border: #374151;
+  --menu-separator: #3a4a63;
   --status-text: #9fb3ce;
   --modified: #e49392;
 }
@@ -115,6 +117,11 @@ body {
   z-index: 40;
 }
 
+.menu-popover:focus,
+.menu-popover:focus-visible {
+  outline: none;
+}
+
 .menu-item {
   font-family: var(--font-menu);
   width: 100%;
@@ -152,9 +159,11 @@ body {
 }
 
 .menu-separator {
-  height: 1px;
+  height: 0;
   margin: 4px 0;
-  background: var(--panel-border);
+  border: 0;
+  border-top: 1px solid var(--menu-separator);
+  background: transparent;
 }
 
 .editor-shell {
@@ -211,6 +220,10 @@ body {
 
 .button.subtle {
   background: transparent;
+}
+
+:root[data-theme="dark"] .button.subtle {
+  color: #ffffff;
 }
 
 .button.danger {

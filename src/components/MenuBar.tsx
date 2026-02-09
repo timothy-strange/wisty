@@ -1,4 +1,4 @@
-import { For, Show, createEffect } from "solid-js";
+import { For, Show } from "solid-js";
 import {
   Root as MenubarRoot,
   Menu as MenubarMenu,
@@ -15,6 +15,8 @@ type MenuBarProps = {
   registry: ReturnType<typeof createCommandRegistry>;
   activeMenuId: string | null;
   onActiveMenuIdChange: (value: string | null) => void;
+  menuPanelOpen: boolean;
+  onMenuPanelOpenChange: (value: boolean) => void;
   onRequestEditorFocus: () => void;
 };
 
@@ -26,21 +28,14 @@ const commandLabel = (definition: CommandDefinition) => {
 };
 
 export const MenuBar = (props: MenuBarProps) => {
-  const triggerRefs = new Map<string, HTMLElement>();
-  let closeTriggeredByEscape = false;
-
-  createEffect(() => {
-    const activeMenuId = props.activeMenuId;
-    if (!activeMenuId) {
-      return;
-    }
-    const trigger = triggerRefs.get(activeMenuId);
-    trigger?.focus();
-  });
+  let closedByEscape = false;
+  let closedBySelection = false;
 
   const executeCommand = async (commandId: string) => {
+    closedBySelection = true;
     await props.registry.execute(commandId);
     props.onActiveMenuIdChange(null);
+    props.onMenuPanelOpenChange(false);
   };
 
   return (
@@ -49,42 +44,43 @@ export const MenuBar = (props: MenuBarProps) => {
       role="menubar"
       aria-label="Application menu"
       value={props.activeMenuId ?? undefined}
-      onValueChange={(value) => props.onActiveMenuIdChange(value ?? null)}
+      onValueChange={(value) => {
+        props.onActiveMenuIdChange(value ?? null);
+        if (value == null) {
+          props.onMenuPanelOpenChange(false);
+        }
+      }}
+      autoFocusMenu={props.menuPanelOpen}
+      onAutoFocusMenuChange={(isOpen) => {
+        const nextOpen = Boolean(isOpen);
+        props.onMenuPanelOpenChange(nextOpen);
+        if (!nextOpen) {
+          props.onActiveMenuIdChange(null);
+        }
+      }}
       loop
     >
       <For each={props.sections}>
         {(section) => (
-          <MenubarMenu
-            value={section.id}
-            onOpenChange={(open) => {
-              if (!open) {
-                props.onActiveMenuIdChange(null);
-              }
-            }}
-          >
-            <MenubarTrigger
-              class="menu-trigger"
-              ref={(element) => {
-                triggerRefs.set(section.id, element);
-              }}
-            >
+          <MenubarMenu value={section.id}>
+            <MenubarTrigger class="menu-trigger">
               {section.label}
             </MenubarTrigger>
             <MenubarPortal>
               <MenubarContent
                 class="menu-popover"
                 onEscapeKeyDown={() => {
-                  closeTriggeredByEscape = true;
+                  closedByEscape = true;
                 }}
                 onCloseAutoFocus={(event) => {
-                  props.onActiveMenuIdChange(null);
-                  if (closeTriggeredByEscape) {
-                    closeTriggeredByEscape = false;
+                  if (closedByEscape || closedBySelection) {
+                    closedByEscape = false;
+                    closedBySelection = false;
                     event.preventDefault();
+                    props.onActiveMenuIdChange(null);
+                    props.onMenuPanelOpenChange(false);
                     props.onRequestEditorFocus();
-                    return;
                   }
-                  closeTriggeredByEscape = false;
                 }}
               >
                 <For each={section.items}>

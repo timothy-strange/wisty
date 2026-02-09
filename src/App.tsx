@@ -30,6 +30,7 @@ function App() {
   const [pendingAction, setPendingAction] = createSignal<null | (() => Promise<void>)>(null);
   const [closeFlowState, setCloseFlowState] = createSignal<CloseFlowState>("idle");
   const [activeMenuId, setActiveMenuId] = createSignal<string | null>(null);
+  const [menuPanelOpen, setMenuPanelOpen] = createSignal(false);
 
   let editorHostRef: HTMLDivElement | undefined;
   let unlistenCloseRequest: (() => void) | undefined;
@@ -182,9 +183,9 @@ function App() {
     { id: "file.quit", label: "Quit", shortcut: shortcut("Q"), run: requestClose },
     { id: "edit.undo", label: "Undo", shortcut: shortcut("Z"), run: () => { editorAdapter.undoEdit(); } },
     { id: "edit.redo", label: "Redo", shortcut: isMac() ? shortcut("Z", true) : shortcut("Y"), run: () => { editorAdapter.redoEdit(); } },
-    { id: "edit.cut", label: "Cut", shortcut: shortcut("X"), run: () => editorAdapter.cutSelection() },
-    { id: "edit.copy", label: "Copy", shortcut: shortcut("C"), run: () => editorAdapter.copySelection() },
-    { id: "edit.paste", label: "Paste", shortcut: shortcut("V"), run: () => editorAdapter.pasteSelection() },
+    { id: "edit.cut", label: "Cut", shortcut: shortcut("X"), run: async () => { await editorAdapter.cutSelection(); } },
+    { id: "edit.copy", label: "Copy", shortcut: shortcut("C"), run: async () => { await editorAdapter.copySelection(); } },
+    { id: "edit.paste", label: "Paste", shortcut: shortcut("V"), run: async () => { await editorAdapter.pasteSelection(); } },
     { id: "edit.find", label: "Find", shortcut: shortcut("F"), run: () => { editorAdapter.toggleFindPanel(); } },
     { id: "edit.replace", label: "Replace", shortcut: shortcut("H"), run: () => { editorAdapter.toggleReplacePanel(); } },
     {
@@ -225,7 +226,7 @@ function App() {
     {
       id: "help.about",
       label: "About Wisty",
-      run: () => message("Wisty v2\nTauri + SolidJS + TypeScript")
+      run: async () => { await message("Wisty v2\nTauri + SolidJS + TypeScript"); }
     }
   ]);
 
@@ -302,6 +303,7 @@ function App() {
       if (targetMenuId) {
         event.preventDefault();
         setActiveMenuId(targetMenuId);
+        setMenuPanelOpen(true);
         return;
       }
     }
@@ -420,6 +422,8 @@ function App() {
         registry={commandRegistry}
         activeMenuId={activeMenuId()}
         onActiveMenuIdChange={setActiveMenuId}
+        menuPanelOpen={menuPanelOpen()}
+        onMenuPanelOpenChange={setMenuPanelOpen}
         onRequestEditorFocus={() => editorAdapter.focus()}
       />
 
