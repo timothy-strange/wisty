@@ -17,6 +17,7 @@ type MenuBarProps = {
   onActiveMenuIdChange: (value: string | null) => void;
   menuPanelOpen: boolean;
   onMenuPanelOpenChange: (value: boolean) => void;
+  onMenuCommandSelected: (commandId: string) => void;
   onRequestEditorFocus: () => void;
 };
 
@@ -28,15 +29,7 @@ const commandLabel = (definition: CommandDefinition) => {
 };
 
 export const MenuBar = (props: MenuBarProps) => {
-  let closedByEscape = false;
-  let closedBySelection = false;
-
-  const executeCommand = async (commandId: string) => {
-    closedBySelection = true;
-    await props.registry.execute(commandId);
-    props.onActiveMenuIdChange(null);
-    props.onMenuPanelOpenChange(false);
-  };
+  let closeReason: "none" | "escape" = "none";
 
   return (
     <MenubarRoot
@@ -70,17 +63,18 @@ export const MenuBar = (props: MenuBarProps) => {
               <MenubarContent
                 class="menu-popover"
                 onEscapeKeyDown={() => {
-                  closedByEscape = true;
+                  closeReason = "escape";
                 }}
                 onCloseAutoFocus={(event) => {
-                  if (closedByEscape || closedBySelection) {
-                    closedByEscape = false;
-                    closedBySelection = false;
+                  if (closeReason === "escape") {
+                    closeReason = "none";
                     event.preventDefault();
                     props.onActiveMenuIdChange(null);
                     props.onMenuPanelOpenChange(false);
                     props.onRequestEditorFocus();
+                    return;
                   }
+                  closeReason = "none";
                 }}
               >
                 <For each={section.items}>
@@ -98,8 +92,9 @@ export const MenuBar = (props: MenuBarProps) => {
                       <MenubarItem
                         class="menu-item"
                         disabled={!enabled}
-                        onSelect={() => void executeCommand(command.id)}
-                        closeOnSelect
+                        onSelect={() => {
+                          props.onMenuCommandSelected(command.id);
+                        }}
                       >
                         <span class="menu-item-label">{commandLabel(command)}</span>
                         <Show when={command.shortcut}>

@@ -1,0 +1,102 @@
+import type { Accessor } from "solid-js";
+import type { FontStyle } from "../settings/settingsTypes";
+
+export type AsyncAction = () => Promise<void>;
+
+export type CloseFlowState = "idle" | "awaiting-discard" | "force-closing";
+
+export type CloseRequestEvent = {
+  preventDefault: () => void;
+};
+
+export type ErrorReporter = {
+  showError: (context: string, error: unknown) => Promise<void>;
+};
+
+export type OpenTextFileResult =
+  | { kind: "cancelled" }
+  | { kind: "opened"; filePath: string; text: string };
+
+export type SaveTextFileAsResult =
+  | { kind: "cancelled" }
+  | { kind: "saved"; filePath: string };
+
+export type FileDialogsPort = {
+  openTextFile: (defaultPath?: string) => Promise<OpenTextFileResult>;
+  saveTextFileAs: (text: string, defaultPath?: string) => Promise<SaveTextFileAsResult>;
+};
+
+export type FileIoPort = {
+  saveTextFile: (filePath: string, text: string) => Promise<void>;
+  getDirectoryFromFilePath: (filePath: string) => string;
+};
+
+export type EditorPort = {
+  focus: () => void;
+  getText: () => string;
+  getRevision: () => number;
+  setText: (text: string, options?: { emitChange?: boolean }) => void;
+  undoEdit: () => boolean;
+  redoEdit: () => boolean;
+  cutSelection: () => Promise<boolean>;
+  copySelection: () => Promise<boolean>;
+  pasteSelection: () => Promise<boolean>;
+  toggleFindPanel: () => boolean;
+  toggleReplacePanel: () => boolean;
+  setHost: (node: HTMLDivElement) => void;
+  init: () => void;
+  destroy: () => void;
+  applySettings: () => void;
+};
+
+export type DocumentPort = {
+  state: {
+    filePath: string;
+    fileName: string;
+    isDirty: boolean;
+  };
+  setRevision: (revision: number) => void;
+  markCleanAt: (revision: number) => void;
+  setFilePath: (filePath: string) => void;
+  setUntitled: () => void;
+};
+
+export type FontSelection = {
+  fontFamily: string;
+  fontSize: number;
+  fontStyle: FontStyle;
+  fontWeight: number;
+};
+
+export type FontPickerPort = {
+  chooseEditorFont: (current: FontSelection) => Promise<FontSelection | null>;
+};
+
+export type SettingsPort = {
+  state: {
+    themeMode: "light" | "dark";
+    fontFamily: string;
+    fontSize: number;
+    fontStyle: FontStyle;
+    fontWeight: number;
+    textWrapEnabled: boolean;
+    highlightCurrentLineEnabled: boolean;
+    highlightSelectionMatchesEnabled: boolean;
+    findReplaceFontSize: number;
+    lastDirectory: string;
+  };
+  ready: Accessor<boolean>;
+  load: () => Promise<void>;
+  actions: {
+    setThemeMode: (mode: "light" | "dark") => Promise<void>;
+    setFontFamily: (fontFamily: string) => Promise<void>;
+    setFontSize: (fontSize: number) => Promise<void>;
+    setFontStyle: (fontStyle: FontStyle) => Promise<void>;
+    setFontWeight: (fontWeight: number) => Promise<void>;
+    setTextWrapEnabled: (enabled: boolean) => Promise<void>;
+    setHighlightCurrentLineEnabled: (enabled: boolean) => Promise<void>;
+    setHighlightSelectionMatchesEnabled: (enabled: boolean) => Promise<void>;
+    setFindReplaceFontSize: (fontSize: number) => Promise<void>;
+    setLastDirectory: (path: string) => Promise<void>;
+  };
+};

@@ -5,6 +5,7 @@ export type CommandDefinition = {
   run: () => void | Promise<void>;
   enabled?: () => boolean;
   checked?: () => boolean;
+  refocusEditorOnMenuSelect?: boolean;
 };
 
 export type MenuItem = {

@@ -1,9 +1,10 @@
 import { Compartment, EditorState } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap, redo, undo } from "@codemirror/commands";
-import { closeSearchPanel, highlightSelectionMatches, openSearchPanel, search, searchKeymap, searchPanelOpen } from "@codemirror/search";
+import { highlightSelectionMatches, search, searchKeymap } from "@codemirror/search";
 import { drawSelection, dropCursor, EditorView, highlightActiveLine, keymap } from "@codemirror/view";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { AppSettings } from "../settings/settingsTypes";
+import { createSearchPanelAdapter } from "./searchPanelAdapter";
 
 type DocChangedPayload = {
   revision: number;
@@ -23,6 +24,7 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
   let editorView: EditorView | undefined;
   let revision = 0;
   let suppressDocEvents = 0;
+  const searchPanelAdapter = createSearchPanelAdapter();
 
   const wrapCompartment = new Compartment();
   const styleCompartment = new Compartment();
@@ -232,38 +234,14 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
     if (!editorView) {
       return false;
     }
-    if (searchPanelOpen(editorView.state)) {
-      return closeSearchPanel(editorView);
-    }
-    const opened = openSearchPanel(editorView);
-    if (opened) {
-      queueMicrotask(() => {
-        const searchInput = editorHost?.querySelector<HTMLInputElement>(".cm-search [name=search]");
-        searchInput?.focus();
-        searchInput?.select();
-      });
-    }
-    return opened;
+    return searchPanelAdapter.toggleFindPanel(editorView);
   };
 
   const toggleReplacePanel = () => {
     if (!editorView) {
       return false;
     }
-    if (searchPanelOpen(editorView.state)) {
-      return closeSearchPanel(editorView);
-    }
-    const opened = openSearchPanel(editorView);
-    if (opened) {
-      queueMicrotask(() => {
-        const replaceInput = editorHost?.querySelector<HTMLInputElement>(".cm-search [name=replace]");
-        const searchInput = editorHost?.querySelector<HTMLInputElement>(".cm-search [name=search]");
-        const target = replaceInput ?? searchInput;
-        target?.focus();
-        target?.select();
-      });
-    }
-    return opened;
+    return searchPanelAdapter.toggleReplacePanel(editorView);
   };
 
   const getSelectedText = () => {
