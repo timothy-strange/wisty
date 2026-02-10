@@ -217,6 +217,10 @@ body {
   background: rgba(9, 14, 20, 0.5);
 }
 
+.discard-dialog-backdrop {
+  z-index: 60;
+}
+
 .modal-panel {
   width: 360px;
   max-width: 92vw;
@@ -225,6 +229,37 @@ body {
   background: var(--menu-popover);
   color: var(--text-main);
   padding: 16px;
+}
+
+.discard-dialog-panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 61;
+}
+
+.large-file-dialog-backdrop {
+  z-index: 62;
+}
+
+.large-file-dialog-panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 63;
+  width: 460px;
+  max-width: 94vw;
+}
+
+.large-file-path {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--status-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .modal-panel h2 {

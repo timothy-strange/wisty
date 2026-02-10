@@ -1,4 +1,12 @@
-import { Show } from "solid-js";
+import {
+  Root as DialogRoot,
+  Portal as DialogPortal,
+  Overlay as DialogOverlay,
+  Content as DialogContent,
+  Title as DialogTitle,
+  Description as DialogDescription,
+  CloseButton as DialogCloseButton
+} from "@kobalte/core/dialog";
 
 type ConfirmDiscardModalProps = {
   open: boolean;
@@ -7,16 +15,17 @@ type ConfirmDiscardModalProps = {
 };
 
 export const ConfirmDiscardModal = (props: ConfirmDiscardModalProps) => (
-  <Show when={props.open}>
-    <div class="modal-backdrop" onClick={props.onCancel}>
-      <div class="modal-panel" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
-        <h2>Warning</h2>
-        <p>You have unsaved changes</p>
+  <DialogRoot open={props.open} onOpenChange={(open) => { if (!open) props.onCancel(); }}>
+    <DialogPortal>
+      <DialogOverlay class="modal-backdrop discard-dialog-backdrop" />
+      <DialogContent class="modal-panel discard-dialog-panel" aria-label="Discard changes confirmation">
+        <DialogTitle>Warning</DialogTitle>
+        <DialogDescription>You have unsaved changes</DialogDescription>
         <div class="modal-actions">
-          <button class="button subtle" onClick={props.onCancel}>Cancel</button>
+          <DialogCloseButton class="button subtle">Cancel</DialogCloseButton>
           <button class="button danger" onClick={props.onDiscard}>Discard</button>
         </div>
-      </div>
-    </div>
-  </Show>
+      </DialogContent>
+    </DialogPortal>
+  </DialogRoot>
 );

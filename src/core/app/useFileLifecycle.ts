@@ -16,7 +16,12 @@ type UseFileLifecycleDeps = {
   fileIo: FileIoPort;
   fontPicker: FontPickerPort;
   errors: ErrorReporter;
+  confirmOpenLargeFile: (filePath: string, sizeBytes: number) => Promise<boolean>;
+  showFileTooLarge: (filePath: string, sizeBytes: number) => Promise<void>;
 };
+
+const SOFT_FILE_LIMIT_BYTES = 50 * 1024 * 1024;
+const HARD_FILE_LIMIT_BYTES = 1024 * 1024 * 1024;
 
 export const useFileLifecycle = (deps: UseFileLifecycleDeps) => {
   const runWithErrorMessage = async (action: () => Promise<void>, context: string) => {
@@ -41,17 +46,58 @@ export const useFileLifecycle = (deps: UseFileLifecycleDeps) => {
 
   const openFile = async () => {
     await runWithErrorMessage(async () => {
-      const result = await deps.fileDialogs.openTextFile(deps.settings.state.lastDirectory);
-      if (result.kind === "cancelled") {
+      const selected = await deps.fileDialogs.openTextFilePath(deps.settings.state.lastDirectory);
+      if (selected.kind === "cancelled") {
         deps.editor.focus();
         return;
       }
 
-      loadEditorTextAsClean(result.text);
-      deps.document.setFilePath(result.filePath);
-      await deps.settings.actions.setLastDirectory(deps.fileIo.getDirectoryFromFilePath(result.filePath));
+      const fileSize = await deps.fileIo.getFileSize(selected.filePath);
+      if (fileSize >= HARD_FILE_LIMIT_BYTES) {
+        await deps.showFileTooLarge(selected.filePath, fileSize);
+        deps.editor.focus();
+        return;
+      }
+
+      if (fileSize >= SOFT_FILE_LIMIT_BYTES) {
+        const shouldOpen = await deps.confirmOpenLargeFile(selected.filePath, fileSize);
+        if (!shouldOpen) {
+          deps.editor.focus();
+          return;
+        }
+      }
+
+      const text = await deps.fileIo.readTextFile(selected.filePath);
+
+      loadEditorTextAsClean(text);
+      deps.document.setFilePath(selected.filePath);
+      await deps.settings.actions.setLastDirectory(deps.fileIo.getDirectoryFromFilePath(selected.filePath));
       deps.editor.focus();
     }, "Unable to open file");
+  };
+
+  const openFileAtPath = async (filePath: string) => {
+    await runWithErrorMessage(async () => {
+      const text = await deps.fileIo.readTextFile(filePath);
+      loadEditorTextAsClean(text);
+      deps.document.setFilePath(filePath);
+      await deps.settings.actions.setLastDirectory(deps.fileIo.getDirectoryFromFilePath(filePath));
+      deps.editor.focus();
+    }, "Unable to open file");
+  };
+
+  const openFileFromTextAtPath = async (filePath: string, text: string) => {
+    loadEditorTextAsClean(text);
+    deps.document.setFilePath(filePath);
+    await deps.settings.actions.setLastDirectory(deps.fileIo.getDirectoryFromFilePath(filePath));
+    deps.editor.focus();
+  };
+
+  const openMissingFileAtPath = async (filePath: string) => {
+    loadEditorTextAsClean("");
+    deps.document.setFilePath(filePath);
+    await deps.settings.actions.setLastDirectory(deps.fileIo.getDirectoryFromFilePath(filePath));
+    deps.editor.focus();
   };
 
   const saveFileAs = async () => {
@@ -106,6 +152,9 @@ export const useFileLifecycle = (deps: UseFileLifecycleDeps) => {
   return {
     newFile,
     openFile,
+    openFileAtPath,
+    openFileFromTextAtPath,
+    openMissingFileAtPath,
     saveFile,
     saveFileAs,
     chooseEditorFont

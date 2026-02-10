@@ -1,5 +1,6 @@
 import { onCleanup, onMount } from "solid-js";
 import type { CloseRequestEvent, DocumentPort, EditorPort } from "./contracts";
+import type { LaunchFileArg } from "../window/launchArgService";
 
 type UseAppLifecycleOptions = {
   getEditorHost: () => HTMLDivElement | undefined;
@@ -7,6 +8,9 @@ type UseAppLifecycleOptions = {
   document: Pick<DocumentPort, "markCleanAt">;
   loadSettings: () => Promise<void>;
   onSettingsLoadError: (error: unknown) => Promise<void>;
+  takeLaunchFileArg: () => Promise<LaunchFileArg | null>;
+  openLaunchFileArg: (launchFile: LaunchFileArg) => Promise<void>;
+  onLaunchFileOpenError: (error: unknown) => Promise<void>;
   loadVersion: () => Promise<string>;
   setAppVersion: (version: string) => void;
   handleGlobalKeydown: (event: KeyboardEvent) => void;
@@ -49,6 +53,22 @@ export const useAppLifecycle = (options: UseAppLifecycleOptions) => {
       })
       .catch(() => {
         // keep fallback version
+      });
+
+    void options
+      .takeLaunchFileArg()
+      .then(async (launchFile) => {
+        if (!launchFile) {
+          return;
+        }
+        try {
+          await options.openLaunchFileArg(launchFile);
+        } catch (error) {
+          await options.onLaunchFileOpenError(error);
+        }
+      })
+      .catch(() => {
+        // ignore unavailable launch argument path
       });
 
     void options

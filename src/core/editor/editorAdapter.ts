@@ -1,6 +1,6 @@
 import { Compartment, EditorState, Transaction } from "@codemirror/state";
 import { defaultKeymap, history, isolateHistory, redo, undo } from "@codemirror/commands";
-import { highlightSelectionMatches, search, searchKeymap } from "@codemirror/search";
+import { search, searchKeymap } from "@codemirror/search";
 import { drawSelection, dropCursor, EditorView, highlightActiveLine, keymap } from "@codemirror/view";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { AppSettings } from "../settings/settingsTypes";
@@ -29,7 +29,6 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
   const wrapCompartment = new Compartment();
   const styleCompartment = new Compartment();
   const activeLineCompartment = new Compartment();
-  const selectionMatchesCompartment = new Compartment();
 
   const createStyleExtension = () => {
     const settings = options.getSettings();
@@ -66,8 +65,14 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
       ".cm-activeLine": {
         background: isDark ? "rgba(124, 152, 202, 0.14)" : "rgba(194, 214, 246, 0.34)"
       },
-      ".cm-selectionBackground, .cm-content ::selection": {
-        background: isDark ? "rgba(90, 132, 211, 0.45)" : "rgba(133, 171, 238, 0.45)"
+      ".cm-selectionBackground": {
+        background: isDark ? "rgba(59,130,246,0.38)" : "rgba(147,197,253,0.55)"
+      },
+      "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground": {
+        background: isDark ? "rgba(59,130,246,0.38)" : "rgba(147,197,253,0.55)"
+      },
+      ".cm-content ::selection": {
+        background: isDark ? "rgba(59,130,246,0.38)" : "rgba(147,197,253,0.55)"
       },
       ".cm-panels-top": {
         border: "none",
@@ -85,11 +90,14 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
         color: isDark ? "#ffffff" : "#000000"
       },
       ".cm-search": {
-        "font-size": `${settings.findReplaceFontSize}px`,
+        "font-family": "var(--font-menu)",
+        "font-size": "13px",
         color: isDark ? "#ffffff" : "#000000",
         "background-color": isDark ? "#1f2937" : "#ffffff"
       },
-      ".cm-search label": {
+      ".cm-panel.cm-search label": {
+        "font-family": "var(--font-menu)",
+        "font-size": "13px",
         color: isDark ? "#ffffff" : "#000000"
       },
       ".cm-search [name=close]": {
@@ -100,6 +108,8 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
         opacity: "1"
       },
       ".cm-search input": {
+        "font-family": "var(--font-menu)",
+        "font-size": "13px",
         border: isDark ? "1px solid #374151" : "1px solid #e5e7eb",
         padding: "3px 6px",
         "border-radius": "4px",
@@ -115,6 +125,8 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
         "accent-color": isDark ? "#8cb2ff" : "#2451c5"
       },
       ".cm-panels .cm-button": {
+        "font-family": "var(--font-menu)",
+        "font-size": "13px",
         border: isDark ? "1px solid #374151" : "1px solid #e5e7eb",
         "border-radius": "4px",
         padding: "3px 7px",
@@ -200,7 +212,6 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
           wrapCompartment.of(settings.textWrapEnabled ? EditorView.lineWrapping : []),
           styleCompartment.of(createStyleExtension()),
           activeLineCompartment.of(settings.highlightCurrentLineEnabled ? highlightActiveLine() : []),
-          selectionMatchesCompartment.of(settings.highlightSelectionMatchesEnabled ? highlightSelectionMatches() : []),
           EditorView.updateListener.of((update) => {
             if (!update.docChanged) {
               return;
@@ -264,8 +275,7 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
       effects: [
         wrapCompartment.reconfigure(settings.textWrapEnabled ? EditorView.lineWrapping : []),
         styleCompartment.reconfigure(createStyleExtension()),
-        activeLineCompartment.reconfigure(settings.highlightCurrentLineEnabled ? highlightActiveLine() : []),
-        selectionMatchesCompartment.reconfigure(settings.highlightSelectionMatchesEnabled ? highlightSelectionMatches() : [])
+        activeLineCompartment.reconfigure(settings.highlightCurrentLineEnabled ? highlightActiveLine() : [])
       ]
     });
   };

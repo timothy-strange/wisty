@@ -16,7 +16,6 @@ export type AppSettings = {
   fontWeight: number;
   textWrapEnabled: boolean;
   highlightCurrentLineEnabled: boolean;
-  highlightSelectionMatchesEnabled: boolean;
   findReplaceFontSize: number;
   lastDirectory: string;
 };
@@ -29,7 +28,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   fontWeight: 400,
   textWrapEnabled: false,
   highlightCurrentLineEnabled: true,
-  highlightSelectionMatchesEnabled: true,
   findReplaceFontSize: 13,
   lastDirectory: ""
 };

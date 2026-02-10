@@ -63,11 +63,6 @@ export const createSettingsStore = () => {
     await saveSetting("highlightCurrentLineEnabled", enabled);
   };
 
-  const setHighlightSelectionMatchesEnabled = async (enabled: boolean) => {
-    setState({ highlightSelectionMatchesEnabled: enabled });
-    await saveSetting("highlightSelectionMatchesEnabled", enabled);
-  };
-
   const setFindReplaceFontSize = async (fontSize: number) => {
     const next = clamp(Math.round(fontSize), 9, 28);
     setState({ findReplaceFontSize: next });
@@ -89,7 +84,6 @@ export const createSettingsStore = () => {
     const loadedFontWeight = await backingStore.get("fontWeight");
     const loadedTextWrapEnabled = await backingStore.get("textWrapEnabled");
     const loadedHighlightCurrentLine = await backingStore.get("highlightCurrentLineEnabled");
-    const loadedHighlightMatches = await backingStore.get("highlightSelectionMatchesEnabled");
     const loadedFindReplaceFontSize = await backingStore.get("findReplaceFontSize");
     const loadedLastDirectory = await backingStore.get("lastDirectory");
 
@@ -107,9 +101,6 @@ export const createSettingsStore = () => {
       highlightCurrentLineEnabled: typeof loadedHighlightCurrentLine === "boolean"
         ? loadedHighlightCurrentLine
         : DEFAULT_SETTINGS.highlightCurrentLineEnabled,
-      highlightSelectionMatchesEnabled: typeof loadedHighlightMatches === "boolean"
-        ? loadedHighlightMatches
-        : DEFAULT_SETTINGS.highlightSelectionMatchesEnabled,
       findReplaceFontSize: typeof loadedFindReplaceFontSize === "number"
         ? clamp(loadedFindReplaceFontSize, 9, 28)
         : DEFAULT_SETTINGS.findReplaceFontSize,
@@ -131,7 +122,6 @@ export const createSettingsStore = () => {
       setFontWeight,
       setTextWrapEnabled,
       setHighlightCurrentLineEnabled,
-      setHighlightSelectionMatchesEnabled,
       setFindReplaceFontSize,
       setLastDirectory
     }

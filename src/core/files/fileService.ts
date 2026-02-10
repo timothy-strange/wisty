@@ -1,9 +1,13 @@
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
+import { readTextFile, stat, writeTextFile } from "@tauri-apps/plugin-fs";
 
 export type OpenFileResult =
   | { kind: "cancelled" }
   | { kind: "opened"; filePath: string; text: string };
+
+export type OpenFilePathResult =
+  | { kind: "cancelled" }
+  | { kind: "opened"; filePath: string };
 
 export type SaveAsResult =
   | { kind: "cancelled" }
@@ -26,6 +30,20 @@ const directoryFromPath = (filePath: string): string => {
 };
 
 export const openTextFile = async (defaultPath?: string): Promise<OpenFileResult> => {
+  const selectedPath = await openTextFilePath(defaultPath);
+  if (selectedPath.kind === "cancelled") {
+    return selectedPath;
+  }
+
+  const text = await readTextFile(selectedPath.filePath);
+  return {
+    kind: "opened",
+    filePath: selectedPath.filePath,
+    text
+  };
+};
+
+export const openTextFilePath = async (defaultPath?: string): Promise<OpenFilePathResult> => {
   const selected = normalizeDialogPath(await open({
     multiple: false,
     defaultPath: defaultPath || undefined
@@ -35,11 +53,9 @@ export const openTextFile = async (defaultPath?: string): Promise<OpenFileResult
     return { kind: "cancelled" };
   }
 
-  const text = await readTextFile(selected);
   return {
     kind: "opened",
-    filePath: selected,
-    text
+    filePath: selected
   };
 };
 
@@ -57,6 +73,15 @@ export const saveTextFileAs = async (text: string, defaultPath?: string): Promis
 
 export const saveTextFile = async (filePath: string, text: string): Promise<void> => {
   await writeTextFile(filePath, text);
+};
+
+export const readTextFileAtPath = async (filePath: string): Promise<string> => {
+  return readTextFile(filePath);
+};
+
+export const getFileSize = async (filePath: string): Promise<number> => {
+  const metadata = await stat(filePath);
+  return metadata.size;
 };
 
 export const getDirectoryFromFilePath = (filePath: string): string => directoryFromPath(filePath);

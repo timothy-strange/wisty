@@ -29,13 +29,11 @@ type BuildCommandsDeps = {
       themeMode: "light" | "dark";
       textWrapEnabled: boolean;
       highlightCurrentLineEnabled: boolean;
-      highlightSelectionMatchesEnabled: boolean;
     };
     actions: {
       setThemeMode: (mode: "light" | "dark") => Promise<void>;
       setTextWrapEnabled: (enabled: boolean) => Promise<void>;
       setHighlightCurrentLineEnabled: (enabled: boolean) => Promise<void>;
-      setHighlightSelectionMatchesEnabled: (enabled: boolean) => Promise<void>;
     };
   };
   showAbout: () => Promise<void>;
@@ -165,13 +163,6 @@ export const buildCommands = (deps: BuildCommandsDeps): { definitions: CommandDe
       checked: () => deps.settings.state.highlightCurrentLineEnabled
     },
     {
-      id: "view.highlight.matches",
-      label: "Highlight Matches",
-      refocusEditorOnMenuSelect: true,
-      run: () => deps.settings.actions.setHighlightSelectionMatchesEnabled(!deps.settings.state.highlightSelectionMatchesEnabled),
-      checked: () => deps.settings.state.highlightSelectionMatchesEnabled
-    },
-    {
       id: "view.font.browser",
       label: "Font...",
       run: deps.fileLifecycle.chooseEditorFont
@@ -220,7 +211,6 @@ export const buildCommands = (deps: BuildCommandsDeps): { definitions: CommandDe
         { type: "separator" },
         { type: "command", commandId: "view.wrap" },
         { type: "command", commandId: "view.highlight.current" },
-        { type: "command", commandId: "view.highlight.matches" },
         { type: "separator" },
         { type: "command", commandId: "view.font.browser" }
       ]

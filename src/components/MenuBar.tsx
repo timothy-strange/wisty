@@ -21,7 +21,7 @@ const commandLabel = (definition: CommandDefinition) => {
 export const MenuBar = () => {
   const commands = useCommandsContext();
   const menu = useMenuContext();
-  let closeReason: "none" | "escape" = "none";
+  let closeReason: "none" | "escape" | "trigger-toggle" = "none";
 
   return (
     <MenubarRoot
@@ -48,7 +48,14 @@ export const MenuBar = () => {
       <For each={commands.sections}>
         {(section) => (
           <MenubarMenu value={section.id}>
-            <MenubarTrigger class="menu-trigger">
+            <MenubarTrigger
+              class="menu-trigger"
+              onPointerDown={() => {
+                if (menu.menuPanelOpen() && menu.activeMenuId() === section.id) {
+                  closeReason = "trigger-toggle";
+                }
+              }}
+            >
               {section.label}
             </MenubarTrigger>
             <MenubarPortal>
@@ -58,7 +65,7 @@ export const MenuBar = () => {
                   closeReason = "escape";
                 }}
                 onCloseAutoFocus={(event) => {
-                  if (closeReason === "escape") {
+                  if (closeReason === "escape" || closeReason === "trigger-toggle") {
                     closeReason = "none";
                     event.preventDefault();
                     menu.onActiveMenuIdChange(null);

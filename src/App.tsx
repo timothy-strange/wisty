@@ -5,6 +5,7 @@ import { message } from "@tauri-apps/plugin-dialog";
 import "./App.css";
 import { AboutDialog } from "./components/AboutDialog";
 import { ConfirmDiscardModal } from "./components/ConfirmDiscardModal";
+import { LargeFileOpenModal } from "./components/LargeFileOpenModal";
 import { MenuBar } from "./components/MenuBar";
 import { createCommandRegistry } from "./core/commands/commandRegistry";
 import { buildCommands } from "./core/commands/buildCommands";
@@ -20,12 +21,35 @@ import { useMenuState } from "./core/app/useMenuState";
 import { useWindowTitleSync } from "./core/app/useWindowTitleSync";
 import { createDocumentStore } from "./core/document/documentStore";
 import { createEditorAdapter } from "./core/editor/editorAdapter";
-import { getDirectoryFromFilePath, openTextFile, saveTextFile, saveTextFileAs } from "./core/files/fileService";
+import {
+  getDirectoryFromFilePath,
+  getFileSize,
+  openTextFile,
+  openTextFilePath,
+  readTextFileAtPath,
+  saveTextFile,
+  saveTextFileAs
+} from "./core/files/fileService";
 import { createSettingsStore } from "./core/settings/settingsStore";
 import { chooseEditorFont } from "./core/fonts/fontDialog";
+import { takeLaunchFileArg, type LaunchFileArg } from "./core/window/launchArgService";
 
 const MAIN_WINDOW_LABEL = "main";
 const PLATFORM_IS_MAC = navigator.userAgent.toLowerCase().includes("mac");
+
+type LargeFileDialogState =
+  | {
+      kind: "confirm";
+      filePath: string;
+      sizeBytes: number;
+      resolve: (value: boolean) => void;
+    }
+  | {
+      kind: "blocked";
+      filePath: string;
+      sizeBytes: number;
+      resolve: () => void;
+    };
 
 function App() {
   const appWindow = getCurrentWindow();
@@ -34,6 +58,7 @@ function App() {
   const menuState = useMenuState();
   const [aboutOpen, setAboutOpen] = createSignal(false);
   const [appVersion, setAppVersion] = createSignal("2.0.0");
+  const [largeFileDialog, setLargeFileDialog] = createSignal<LargeFileDialogState | null>(null);
 
   let editorHostRef: HTMLDivElement | undefined;
 
@@ -50,22 +75,52 @@ function App() {
     }
   };
 
+  const closeLargeFileDialog = () => {
+    setLargeFileDialog(null);
+    editorAdapter.focus();
+  };
+
+  const confirmOpenLargeFile = (filePath: string, sizeBytes: number): Promise<boolean> =>
+    new Promise((resolve) => {
+      setLargeFileDialog({
+        kind: "confirm",
+        filePath,
+        sizeBytes,
+        resolve
+      });
+    });
+
+  const showFileTooLarge = (filePath: string, sizeBytes: number): Promise<void> =>
+    new Promise((resolve) => {
+      setLargeFileDialog({
+        kind: "blocked",
+        filePath,
+        sizeBytes,
+        resolve
+      });
+    });
+
   const fileLifecycle = useFileLifecycle({
     editor: editorAdapter,
     document: documentStore,
     settings: settingsStore,
     fileDialogs: {
       openTextFile,
+      openTextFilePath,
       saveTextFileAs
     },
     fileIo: {
+      getFileSize,
+      readTextFile: readTextFileAtPath,
       saveTextFile,
       getDirectoryFromFilePath
     },
     fontPicker: {
       chooseEditorFont
     },
-    errors
+    errors,
+    confirmOpenLargeFile,
+    showFileTooLarge
   });
 
   const closeFlow = useCloseFlow({
@@ -138,6 +193,20 @@ function App() {
     onSettingsLoadError: async (error) => {
       await message(`Unable to load settings: ${String(error)}`);
     },
+    takeLaunchFileArg,
+    openLaunchFileArg: async (launchFile: LaunchFileArg) => {
+      if (launchFile.exists) {
+        if (typeof launchFile.text === "string") {
+          await fileLifecycle.openFileFromTextAtPath(launchFile.path, launchFile.text);
+          return;
+        }
+        throw new Error(`Launch payload missing text for existing file: ${launchFile.path}`);
+      }
+      await fileLifecycle.openMissingFileAtPath(launchFile.path);
+    },
+    onLaunchFileOpenError: async (error) => {
+      await message(`Unable to open launch file: ${String(error)}`);
+    },
     loadVersion: () => getVersion(),
     setAppVersion,
     handleGlobalKeydown,
@@ -153,8 +222,6 @@ function App() {
     settingsStore.state.fontWeight;
     settingsStore.state.textWrapEnabled;
     settingsStore.state.highlightCurrentLineEnabled;
-    settingsStore.state.highlightSelectionMatchesEnabled;
-    settingsStore.state.findReplaceFontSize;
     editorAdapter.applySettings();
   });
 
@@ -184,6 +251,34 @@ function App() {
             open={aboutOpen()}
             version={appVersion()}
             onClose={closeAboutDialog}
+          />
+
+          <LargeFileOpenModal
+            open={largeFileDialog() !== null}
+            kind={largeFileDialog()?.kind ?? "confirm"}
+            filePath={largeFileDialog()?.filePath ?? ""}
+            sizeBytes={largeFileDialog()?.sizeBytes ?? 0}
+            onCancel={() => {
+              const state = largeFileDialog();
+              if (state?.kind === "confirm") {
+                state.resolve(false);
+              }
+              closeLargeFileDialog();
+            }}
+            onOpenAnyway={() => {
+              const state = largeFileDialog();
+              if (state?.kind === "confirm") {
+                state.resolve(true);
+              }
+              closeLargeFileDialog();
+            }}
+            onAcknowledge={() => {
+              const state = largeFileDialog();
+              if (state?.kind === "blocked") {
+                state.resolve();
+              }
+              closeLargeFileDialog();
+            }}
           />
         </main>
       </MenuProvider>

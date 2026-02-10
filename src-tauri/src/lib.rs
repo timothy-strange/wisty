@@ -1,4 +1,12 @@
 use log::LevelFilter;
+use serde::Serialize;
+use std::io::ErrorKind;
+use std::io::{IsTerminal, Write};
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+
+const CLI_SOFT_LIMIT_BYTES: u64 = 50 * 1024 * 1024;
+const CLI_HARD_LIMIT_BYTES: u64 = 1024 * 1024 * 1024;
 
 #[derive(serde::Serialize)]
 struct EditorFontSelection {
@@ -19,6 +27,213 @@ struct EditorFontInput {
     font_size: f64,
     font_style: String,
     font_weight: i32,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LaunchFileArg {
+    path: String,
+    exists: bool,
+    text: Option<String>,
+}
+
+struct LaunchArgState {
+    pending_file: Mutex<Option<LaunchFileArg>>,
+}
+
+impl LaunchArgState {
+    fn new(pending_file: Option<LaunchFileArg>) -> Self {
+        Self {
+            pending_file: Mutex::new(pending_file),
+        }
+    }
+}
+
+fn parse_positional_launch_args() -> Result<Option<String>, String> {
+    let mut positional: Vec<String> = Vec::new();
+    let mut passthrough_mode = false;
+
+    for arg in std::env::args().skip(1) {
+        if !passthrough_mode && arg == "--" {
+            passthrough_mode = true;
+            continue;
+        }
+        if !passthrough_mode && arg.starts_with('-') {
+            continue;
+        }
+        positional.push(arg);
+    }
+
+    if positional.len() > 1 {
+        return Err("Only one file path argument is supported".to_string());
+    }
+
+    Ok(positional.into_iter().next())
+}
+
+fn normalize_cli_path(raw: &str) -> Result<PathBuf, String> {
+    if raw.trim().is_empty() {
+        return Err("Empty file path argument".to_string());
+    }
+
+    let maybe_file_uri = raw.strip_prefix("file://");
+    let path = if let Some(uri_path) = maybe_file_uri {
+        if uri_path.is_empty() {
+            return Err("Invalid file:// path argument".to_string());
+        }
+        #[cfg(windows)]
+        {
+            let normalized = uri_path.strip_prefix('/').unwrap_or(uri_path);
+            PathBuf::from(normalized)
+        }
+        #[cfg(not(windows))]
+        {
+            PathBuf::from(uri_path)
+        }
+    } else {
+        PathBuf::from(raw)
+    };
+
+    if path.is_absolute() {
+        return Ok(path);
+    }
+
+    let cwd = std::env::current_dir()
+        .map_err(|error| format!("Unable to determine current directory: {error}"))?;
+    Ok(cwd.join(path))
+}
+
+fn is_interactive_tty() -> bool {
+    std::io::stdin().is_terminal() && std::io::stdout().is_terminal()
+}
+
+fn format_size_mb(size_bytes: u64) -> String {
+    format!("{:.1}", size_bytes as f64 / (1024.0 * 1024.0))
+}
+
+fn confirm_large_cli_open(path: &Path, size_bytes: u64) -> Result<(), String> {
+    if size_bytes < CLI_SOFT_LIMIT_BYTES {
+        return Ok(());
+    }
+
+    if size_bytes >= CLI_HARD_LIMIT_BYTES {
+        return Err(format!(
+            "File is too large to open safely ({} MB, hard limit is {} MB): {}",
+            format_size_mb(size_bytes),
+            format_size_mb(CLI_HARD_LIMIT_BYTES),
+            path.to_string_lossy()
+        ));
+    }
+
+    if !is_interactive_tty() {
+        return Err(format!(
+            "File is large ({} MB). Run from an interactive terminal to confirm opening: {}",
+            format_size_mb(size_bytes),
+            path.to_string_lossy()
+        ));
+    }
+
+    eprintln!(
+        "wisty: warning: '{}' is a large file ({} MB).",
+        path.to_string_lossy(),
+        format_size_mb(size_bytes)
+    );
+    eprint!("Open anyway? [y/N] ");
+    std::io::stderr()
+        .flush()
+        .map_err(|error| format!("Unable to prompt for confirmation: {error}"))?;
+
+    let mut input = String::new();
+    std::io::stdin()
+        .read_line(&mut input)
+        .map_err(|error| format!("Unable to read confirmation input: {error}"))?;
+
+    let answer = input.trim().to_ascii_lowercase();
+    if answer == "y" || answer == "yes" {
+        return Ok(());
+    }
+
+    Err(format!(
+        "Opening cancelled for large file: {}",
+        path.to_string_lossy()
+    ))
+}
+
+fn validate_launch_file_arg(path: &Path) -> Result<LaunchFileArg, String> {
+    match std::fs::metadata(path) {
+        Ok(metadata) => {
+            if !metadata.is_file() {
+                return Err(format!("Path is not a regular file: {}", path.to_string_lossy()));
+            }
+            confirm_large_cli_open(path, metadata.len())?;
+            let canonical_path = std::fs::canonicalize(path)
+                .map_err(|error| format!("Unable to normalize file path '{}': {error}", path.to_string_lossy()))?;
+            let text = std::fs::read_to_string(&canonical_path)
+                .map_err(|error| format!("Unable to read file '{}': {error}", canonical_path.to_string_lossy()))?;
+
+            Ok(LaunchFileArg {
+                path: canonical_path.to_string_lossy().to_string(),
+                exists: true,
+                text: Some(text),
+            })
+        }
+        Err(error) if error.kind() == ErrorKind::NotFound => {
+            let parent = path.parent().ok_or_else(|| {
+                format!(
+                    "Cannot determine parent directory for '{}'",
+                    path.to_string_lossy()
+                )
+            })?;
+
+            if !parent.exists() {
+                return Err(format!(
+                    "Parent directory does not exist for '{}'",
+                    path.to_string_lossy()
+                ));
+            }
+
+            if !parent.is_dir() {
+                return Err(format!(
+                    "Parent path is not a directory for '{}'",
+                    path.to_string_lossy()
+                ));
+            }
+
+            let canonical_parent = std::fs::canonicalize(parent).map_err(|error| {
+                format!(
+                    "Unable to normalize parent directory for '{}': {error}",
+                    path.to_string_lossy()
+                )
+            })?;
+            let file_name = path.file_name().ok_or_else(|| {
+                format!(
+                    "Cannot determine file name for '{}'",
+                    path.to_string_lossy()
+                )
+            })?;
+            let normalized_path = canonical_parent.join(file_name);
+
+            Ok(LaunchFileArg {
+                path: normalized_path.to_string_lossy().to_string(),
+                exists: false,
+                text: None,
+            })
+        }
+        Err(error) => Err(format!(
+            "Unable to access '{}': {error}",
+            path.to_string_lossy()
+        )),
+    }
+}
+
+fn resolve_launch_file_arg() -> Result<Option<LaunchFileArg>, String> {
+    let raw = parse_positional_launch_args()?;
+    let Some(raw_path) = raw else {
+        return Ok(None);
+    };
+
+    let normalized = normalize_cli_path(&raw_path)?;
+    validate_launch_file_arg(&normalized).map(Some)
 }
 
 fn to_pango_style(value: &str) -> gtk::pango::Style {
@@ -140,8 +355,37 @@ fn choose_editor_font(
     }
 }
 
+#[tauri::command]
+fn take_launch_file_arg(
+    state: tauri::State<'_, LaunchArgState>,
+) -> Result<Option<LaunchFileArg>, String> {
+    let mut guard = state
+        .pending_file
+        .lock()
+        .map_err(|error| format!("Unable to read launch args state: {error}"))?;
+
+    if let Some(launch_file) = guard.as_ref() {
+        if launch_file.exists && launch_file.text.is_none() {
+            return Err(format!(
+                "Invalid startup payload: existing file has no text: {}",
+                launch_file.path
+            ));
+        }
+    }
+
+    Ok(guard.take())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let launch_file = match resolve_launch_file_arg() {
+        Ok(value) => value,
+        Err(error) => {
+            eprintln!("wisty: {error}");
+            std::process::exit(1);
+        }
+    };
+
     let is_debug_build = cfg!(debug_assertions);
     let log_plugin = tauri_plugin_log::Builder::new()
         .level(if is_debug_build {
@@ -160,13 +404,18 @@ pub fn run() {
         .build();
 
     tauri::Builder::default()
+        .manage(LaunchArgState::new(launch_file))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(log_plugin)
-        .invoke_handler(tauri::generate_handler![choose_editor_font, window_title::set_window_title])
+        .invoke_handler(tauri::generate_handler![
+            choose_editor_font,
+            take_launch_file_arg,
+            window_title::set_window_title
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

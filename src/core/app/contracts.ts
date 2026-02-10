@@ -17,16 +17,23 @@ export type OpenTextFileResult =
   | { kind: "cancelled" }
   | { kind: "opened"; filePath: string; text: string };
 
+export type OpenTextFilePathResult =
+  | { kind: "cancelled" }
+  | { kind: "opened"; filePath: string };
+
 export type SaveTextFileAsResult =
   | { kind: "cancelled" }
   | { kind: "saved"; filePath: string };
 
 export type FileDialogsPort = {
   openTextFile: (defaultPath?: string) => Promise<OpenTextFileResult>;
+  openTextFilePath: (defaultPath?: string) => Promise<OpenTextFilePathResult>;
   saveTextFileAs: (text: string, defaultPath?: string) => Promise<SaveTextFileAsResult>;
 };
 
 export type FileIoPort = {
+  getFileSize: (filePath: string) => Promise<number>;
+  readTextFile: (filePath: string) => Promise<string>;
   saveTextFile: (filePath: string, text: string) => Promise<void>;
   getDirectoryFromFilePath: (filePath: string) => string;
 };
@@ -81,7 +88,6 @@ export type SettingsPort = {
     fontWeight: number;
     textWrapEnabled: boolean;
     highlightCurrentLineEnabled: boolean;
-    highlightSelectionMatchesEnabled: boolean;
     findReplaceFontSize: number;
     lastDirectory: string;
   };
@@ -95,7 +101,6 @@ export type SettingsPort = {
     setFontWeight: (fontWeight: number) => Promise<void>;
     setTextWrapEnabled: (enabled: boolean) => Promise<void>;
     setHighlightCurrentLineEnabled: (enabled: boolean) => Promise<void>;
-    setHighlightSelectionMatchesEnabled: (enabled: boolean) => Promise<void>;
     setFindReplaceFontSize: (fontSize: number) => Promise<void>;
     setLastDirectory: (path: string) => Promise<void>;
   };
