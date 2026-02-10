@@ -16,7 +16,6 @@ type UseFileLifecycleDeps = {
   fileIo: FileIoPort;
   fontPicker: FontPickerPort;
   errors: ErrorReporter;
-  logInfo?: (message: string) => Promise<void>;
 };
 
 export const useFileLifecycle = (deps: UseFileLifecycleDeps) => {
@@ -96,10 +95,6 @@ export const useFileLifecycle = (deps: UseFileLifecycleDeps) => {
       if (!selection) {
         return;
       }
-
-      void deps.logInfo?.(`[wisty] chooseEditorFont selection ${JSON.stringify(selection)}`).catch(() => {
-        // ignore logging transport failures
-      });
 
       await deps.settings.actions.setFontFamily(selection.fontFamily);
       await deps.settings.actions.setFontSize(selection.fontSize);

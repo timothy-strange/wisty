@@ -1,3 +1,5 @@
+use log::LevelFilter;
+
 #[derive(serde::Serialize)]
 struct EditorFontSelection {
     #[serde(rename = "fontFamily")]
@@ -68,8 +70,7 @@ fn choose_editor_font(
 
         app.run_on_main_thread(move || {
             if !gtk::is_initialized() {
-                if let Err(error) = gtk::init() {
-                    eprintln!("[wisty-font] gtk init failed: {}", error);
+                if let Err(_error) = gtk::init() {
                     let _ = tx.send(None);
                     return;
                 }
@@ -89,7 +90,6 @@ fn choose_editor_font(
             }
 
             let response = dialog.run();
-            eprintln!("[wisty-font] dialog response: {:?}", response);
 
             let selected = if matches!(
                 response,
@@ -120,21 +120,12 @@ fn choose_editor_font(
                     font_weight: description.weight().into_glib(),
                 };
 
-                eprintln!(
-                    "[wisty-font] selected family='{}' size={} style={} weight={}",
-                    selection.font_family,
-                    selection.font_size,
-                    selection.font_style,
-                    selection.font_weight
-                );
-
                 Some(selection)
             } else {
                 None
             };
 
             dialog.close();
-            eprintln!("[wisty-font] returning selection: {}", selected.is_some());
             let _ = tx.send(selected);
         })
         .map_err(|error| error.to_string())?;
@@ -151,14 +142,32 @@ fn choose_editor_font(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let is_debug_build = cfg!(debug_assertions);
+    let log_plugin = tauri_plugin_log::Builder::new()
+        .level(if is_debug_build {
+            LevelFilter::Info
+        } else {
+            LevelFilter::Warn
+        })
+        .level_for("arboard", LevelFilter::Warn)
+        .level_for("arboard::platform::linux::x11", LevelFilter::Warn)
+        .filter(move |metadata| {
+            if is_debug_build {
+                return true;
+            }
+            metadata.target().starts_with("wisty::")
+        })
+        .build();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_clipboard_manager::init())
-        .plugin(tauri_plugin_log::Builder::default().build())
-        .invoke_handler(tauri::generate_handler![choose_editor_font])
+        .plugin(log_plugin)
+        .invoke_handler(tauri::generate_handler![choose_editor_font, window_title::set_window_title])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+mod window_title;
