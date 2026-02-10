@@ -25,6 +25,41 @@ export type SaveTextFileAsResult =
   | { kind: "cancelled" }
   | { kind: "saved"; filePath: string };
 
+export type TextStreamChunk = {
+  text: string;
+  bytesReadTotal: number;
+  fileSizeBytes?: number;
+};
+
+export type StreamReadTextFileOptions = {
+  chunkSizeBytes?: number;
+};
+
+export type FileLoadPhase = "idle" | "loading" | "cancelling" | "error";
+
+export type FileLoadProgress = {
+  elapsedMs: number;
+  bytesRead: number;
+  totalBytes?: number;
+};
+
+export type LaunchFileStreamStartResult = {
+  streamId: string;
+  filePath: string;
+  fileSizeBytes: number;
+};
+
+export type LaunchFileStreamChunkResult =
+  | { kind: "chunk"; text: string; bytesReadTotal: number; fileSizeBytes: number }
+  | { kind: "eof"; bytesReadTotal: number; fileSizeBytes: number };
+
+export type LaunchFileStreamPort = {
+  startLaunchFileStream: (filePath: string) => Promise<LaunchFileStreamStartResult>;
+  readLaunchFileChunk: (streamId: string, maxBytes: number) => Promise<LaunchFileStreamChunkResult>;
+  cancelLaunchFileStream: (streamId: string) => Promise<void>;
+  closeLaunchFileStream: (streamId: string) => Promise<void>;
+};
+
 export type FileDialogsPort = {
   openTextFile: (defaultPath?: string) => Promise<OpenTextFileResult>;
   openTextFilePath: (defaultPath?: string) => Promise<OpenTextFilePathResult>;
@@ -34,8 +69,22 @@ export type FileDialogsPort = {
 export type FileIoPort = {
   getFileSize: (filePath: string) => Promise<number>;
   readTextFile: (filePath: string) => Promise<string>;
+  streamReadTextFile: (
+    filePath: string,
+    options?: StreamReadTextFileOptions
+  ) => AsyncGenerator<TextStreamChunk, void, void>;
   saveTextFile: (filePath: string, text: string) => Promise<void>;
   getDirectoryFromFilePath: (filePath: string) => string;
+};
+
+export type AppendTextOptions = {
+  emitChange?: boolean;
+  addToHistory?: boolean;
+};
+
+export type ResetEditorOptions = {
+  emitChange?: boolean;
+  addToHistory?: boolean;
 };
 
 export type EditorPort = {
@@ -43,6 +92,13 @@ export type EditorPort = {
   getText: () => string;
   getRevision: () => number;
   setText: (text: string, options?: { emitChange?: boolean }) => void;
+  append: (text: string, options?: AppendTextOptions) => void;
+  reset: (options?: ResetEditorOptions) => void;
+  beginProgrammaticLoad: () => void;
+  appendToProgrammaticLoad: (text: string) => void;
+  commitProgrammaticLoad: (options?: { emitChange?: boolean }) => void;
+  cancelProgrammaticLoad: () => void;
+  setLargeLineSafeMode: (enabled: boolean) => void;
   undoEdit: () => boolean;
   redoEdit: () => boolean;
   cutSelection: () => Promise<boolean>;
@@ -88,7 +144,6 @@ export type SettingsPort = {
     fontWeight: number;
     textWrapEnabled: boolean;
     highlightCurrentLineEnabled: boolean;
-    findReplaceFontSize: number;
     lastDirectory: string;
   };
   ready: Accessor<boolean>;
@@ -101,7 +156,6 @@ export type SettingsPort = {
     setFontWeight: (fontWeight: number) => Promise<void>;
     setTextWrapEnabled: (enabled: boolean) => Promise<void>;
     setHighlightCurrentLineEnabled: (enabled: boolean) => Promise<void>;
-    setFindReplaceFontSize: (fontSize: number) => Promise<void>;
     setLastDirectory: (path: string) => Promise<void>;
   };
 };

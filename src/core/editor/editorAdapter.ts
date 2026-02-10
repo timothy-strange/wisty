@@ -19,11 +19,24 @@ type SetTextOptions = {
   emitChange?: boolean;
 };
 
+type AppendTextOptions = {
+  emitChange?: boolean;
+  addToHistory?: boolean;
+};
+
+type ResetEditorOptions = {
+  emitChange?: boolean;
+  addToHistory?: boolean;
+};
+
 export const createEditorAdapter = (options: EditorAdapterOptions) => {
   let editorHost: HTMLDivElement | undefined;
   let editorView: EditorView | undefined;
   let revision = 0;
   let suppressDocEvents = 0;
+  let stagedLoadState: EditorState | undefined;
+  let stagedLoadRevision = 0;
+  let largeLineSafeModeEnabled = false;
   const searchPanelAdapter = createSearchPanelAdapter();
 
   const wrapCompartment = new Compartment();
@@ -144,6 +157,105 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
     }, { dark: isDark });
   };
 
+  const historyBoundaryExtension = EditorState.transactionExtender.of((tr) => {
+    if (!tr.docChanged) {
+      return null;
+    }
+    if (tr.isUserEvent("undo") || tr.isUserEvent("redo")) {
+      return null;
+    }
+
+    if (tr.isUserEvent("delete.cut") || tr.isUserEvent("input.paste")) {
+      return { annotations: isolateHistory.of("full") };
+    }
+
+    if (!tr.isUserEvent("input.type")) {
+      return null;
+    }
+
+    let crossedWordBoundary = false;
+    tr.changes.iterChanges((_fromA, _toA, _fromB, _toB, inserted) => {
+      if (crossedWordBoundary) {
+        return;
+      }
+      if (/[\s.,;:!?()[\]{}]/.test(inserted.toString())) {
+        crossedWordBoundary = true;
+      }
+    });
+
+    if (!crossedWordBoundary) {
+      return null;
+    }
+
+    return { annotations: isolateHistory.of("after") };
+  });
+
+  const createEditorState = (doc: string) => {
+    const settings = options.getSettings();
+
+    return EditorState.create({
+      doc,
+      extensions: [
+        search(),
+        history({
+          newGroupDelay: 150,
+          joinToEvent: (tr, isAdjacent) => {
+            if (!isAdjacent) {
+              return false;
+            }
+            return tr.isUserEvent("input.type") || tr.isUserEvent("delete.backward") || tr.isUserEvent("delete.forward");
+          }
+        }),
+        historyBoundaryExtension,
+        drawSelection(),
+        dropCursor(),
+        keymap.of([
+          ...defaultKeymap,
+          ...searchKeymap.filter((binding) => binding.key !== "Mod-f")
+        ]),
+        wrapCompartment.of(!largeLineSafeModeEnabled && settings.textWrapEnabled ? EditorView.lineWrapping : []),
+        styleCompartment.of(createStyleExtension()),
+        activeLineCompartment.of(!largeLineSafeModeEnabled && settings.highlightCurrentLineEnabled ? highlightActiveLine() : []),
+        EditorView.updateListener.of((update) => {
+          if (!update.docChanged) {
+            return;
+          }
+          revision += 1;
+          if (suppressDocEvents > 0) {
+            return;
+          }
+          options.onDocChanged({ revision });
+        })
+      ]
+    });
+  };
+
+  const dispatchTextChange = (
+    changes: { from: number; to: number; insert: string },
+    editOptions: { emitChange?: boolean; addToHistory?: boolean }
+  ) => {
+    if (!editorView) {
+      return;
+    }
+
+    const emitChange = editOptions.emitChange ?? true;
+    const addToHistory = editOptions.addToHistory ?? true;
+
+    if (!emitChange) {
+      suppressDocEvents += 1;
+    }
+    try {
+      editorView.dispatch({
+        changes,
+        annotations: [Transaction.addToHistory.of(addToHistory)]
+      });
+    } finally {
+      if (!emitChange) {
+        suppressDocEvents = Math.max(0, suppressDocEvents - 1);
+      }
+    }
+  };
+
   const setHost = (node: HTMLDivElement) => {
     editorHost = node;
   };
@@ -153,77 +265,9 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
       return;
     }
 
-    const settings = options.getSettings();
-    const historyBoundaryExtension = EditorState.transactionExtender.of((tr) => {
-      if (!tr.docChanged) {
-        return null;
-      }
-      if (tr.isUserEvent("undo") || tr.isUserEvent("redo")) {
-        return null;
-      }
-
-      if (tr.isUserEvent("delete.cut") || tr.isUserEvent("input.paste")) {
-        return { annotations: isolateHistory.of("full") };
-      }
-
-      if (!tr.isUserEvent("input.type")) {
-        return null;
-      }
-
-      let crossedWordBoundary = false;
-      tr.changes.iterChanges((_fromA, _toA, _fromB, _toB, inserted) => {
-        if (crossedWordBoundary) {
-          return;
-        }
-        if (/[\s.,;:!?()[\]{}]/.test(inserted.toString())) {
-          crossedWordBoundary = true;
-        }
-      });
-
-      if (!crossedWordBoundary) {
-        return null;
-      }
-
-      return { annotations: isolateHistory.of("after") };
-    });
-
     editorView = new EditorView({
       parent: editorHost,
-      state: EditorState.create({
-        doc: "",
-        extensions: [
-          search(),
-          history({
-            newGroupDelay: 150,
-            joinToEvent: (tr, isAdjacent) => {
-              if (!isAdjacent) {
-                return false;
-              }
-              return tr.isUserEvent("input.type") || tr.isUserEvent("delete.backward") || tr.isUserEvent("delete.forward");
-            }
-          }),
-          historyBoundaryExtension,
-          drawSelection(),
-          dropCursor(),
-          keymap.of([
-            ...defaultKeymap,
-            ...searchKeymap.filter((binding) => binding.key !== "Mod-f")
-          ]),
-          wrapCompartment.of(settings.textWrapEnabled ? EditorView.lineWrapping : []),
-          styleCompartment.of(createStyleExtension()),
-          activeLineCompartment.of(settings.highlightCurrentLineEnabled ? highlightActiveLine() : []),
-          EditorView.updateListener.of((update) => {
-            if (!update.docChanged) {
-              return;
-            }
-            revision += 1;
-            if (suppressDocEvents > 0) {
-              return;
-            }
-            options.onDocChanged({ revision });
-          })
-        ]
-      })
+      state: createEditorState("")
     });
   };
 
@@ -247,22 +291,109 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
     if (!editorView) {
       return;
     }
-    const emitChange = setTextOptions.emitChange ?? true;
-    if (!emitChange) {
-      suppressDocEvents += 1;
+    dispatchTextChange({
+      from: 0,
+      to: editorView.state.doc.length,
+      insert: text
+    }, {
+      emitChange: setTextOptions.emitChange,
+      addToHistory: true
+    });
+  };
+
+  const append = (text: string, appendOptions: AppendTextOptions = {}) => {
+    if (!editorView) {
+      return;
     }
-    try {
-      editorView.dispatch({
-        changes: {
-          from: 0,
-          to: editorView.state.doc.length,
-          insert: text
-        }
-      });
-    } finally {
-      if (!emitChange) {
-        suppressDocEvents = Math.max(0, suppressDocEvents - 1);
-      }
+
+    if (typeof text !== "string") {
+      throw new Error(`Editor append expects string text, received ${typeof text}`);
+    }
+
+    if (text.length === 0) {
+      return;
+    }
+
+    const from = editorView.state.doc.length;
+    dispatchTextChange({
+      from,
+      to: from,
+      insert: text
+    }, {
+      emitChange: appendOptions.emitChange,
+      addToHistory: appendOptions.addToHistory ?? false
+    });
+  };
+
+  const beginProgrammaticLoad = () => {
+    stagedLoadState = createEditorState("");
+    stagedLoadRevision = 0;
+  };
+
+  const appendToProgrammaticLoad = (text: string) => {
+    if (!stagedLoadState) {
+      throw new Error("Programmatic load has not started");
+    }
+    if (typeof text !== "string") {
+      throw new Error(`Programmatic append expects string text, received ${typeof text}`);
+    }
+    if (text.length === 0) {
+      return;
+    }
+
+    const from = stagedLoadState.doc.length;
+    stagedLoadState = stagedLoadState.update({
+      changes: {
+        from,
+        to: from,
+        insert: text
+      },
+      annotations: [Transaction.addToHistory.of(false)]
+    }).state;
+    stagedLoadRevision += 1;
+  };
+
+  const commitProgrammaticLoad = (optionsArg: { emitChange?: boolean } = {}) => {
+    if (!editorView || !stagedLoadState) {
+      stagedLoadState = undefined;
+      stagedLoadRevision = 0;
+      return;
+    }
+
+    const emitChange = optionsArg.emitChange ?? true;
+    editorView.setState(stagedLoadState);
+    editorView.scrollDOM.scrollTop = 0;
+    editorView.scrollDOM.scrollLeft = 0;
+    revision = stagedLoadRevision;
+    stagedLoadState = undefined;
+    stagedLoadRevision = 0;
+
+    if (emitChange) {
+      options.onDocChanged({ revision });
+    }
+  };
+
+  const cancelProgrammaticLoad = () => {
+    stagedLoadState = undefined;
+    stagedLoadRevision = 0;
+  };
+
+  const reset = (resetOptions: ResetEditorOptions = {}) => {
+    if (!editorView) {
+      return;
+    }
+
+    const emitChange = resetOptions.emitChange ?? true;
+    void resetOptions.addToHistory;
+
+    const nextState = createEditorState("");
+    editorView.setState(nextState);
+    revision = 0;
+    editorView.scrollDOM.scrollTop = 0;
+    editorView.scrollDOM.scrollLeft = 0;
+
+    if (emitChange) {
+      options.onDocChanged({ revision });
     }
   };
 
@@ -273,11 +404,19 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
     const settings = options.getSettings();
     editorView.dispatch({
       effects: [
-        wrapCompartment.reconfigure(settings.textWrapEnabled ? EditorView.lineWrapping : []),
+        wrapCompartment.reconfigure(!largeLineSafeModeEnabled && settings.textWrapEnabled ? EditorView.lineWrapping : []),
         styleCompartment.reconfigure(createStyleExtension()),
-        activeLineCompartment.reconfigure(settings.highlightCurrentLineEnabled ? highlightActiveLine() : [])
+        activeLineCompartment.reconfigure(!largeLineSafeModeEnabled && settings.highlightCurrentLineEnabled ? highlightActiveLine() : [])
       ]
     });
+  };
+
+  const setLargeLineSafeMode = (enabled: boolean) => {
+    if (largeLineSafeModeEnabled === enabled) {
+      return;
+    }
+    largeLineSafeModeEnabled = enabled;
+    applySettings();
   };
 
   const toggleFindPanel = () => {
@@ -378,6 +517,13 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
     focus,
     getText,
     setText,
+    append,
+    reset,
+    beginProgrammaticLoad,
+    appendToProgrammaticLoad,
+    commitProgrammaticLoad,
+    cancelProgrammaticLoad,
+    setLargeLineSafeMode,
     applySettings,
     toggleFindPanel,
     toggleReplacePanel,

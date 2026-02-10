@@ -7,6 +7,7 @@ type UseMenuCommandPipelineOptions = {
   setActiveMenuId: (value: string | null) => void;
   commandRegistry: CommandRegistry;
   focusEditor: () => void;
+  isInteractionBlocked: Accessor<boolean>;
 };
 
 export const useMenuCommandPipeline = (options: UseMenuCommandPipelineOptions) => {
@@ -14,6 +15,11 @@ export const useMenuCommandPipeline = (options: UseMenuCommandPipelineOptions) =
   let pendingMenuCommandFrame = 0;
 
   const executePendingMenuCommand = async () => {
+    if (options.isInteractionBlocked()) {
+      setPendingMenuCommandId(null);
+      return;
+    }
+
     const commandId = pendingMenuCommandId();
     if (!commandId) {
       return;
@@ -45,6 +51,9 @@ export const useMenuCommandPipeline = (options: UseMenuCommandPipelineOptions) =
   };
 
   const handleMenuCommandSelected = (commandId: string) => {
+    if (options.isInteractionBlocked()) {
+      return;
+    }
     setPendingMenuCommandId(commandId);
     options.setActiveMenuId(null);
     options.setMenuPanelOpen(false);

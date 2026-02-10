@@ -1,4 +1,4 @@
-import { createEffect, createSignal } from "solid-js";
+import { Show, createEffect, createSignal } from "solid-js";
 import { getVersion } from "@tauri-apps/api/app";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { message } from "@tauri-apps/plugin-dialog";
@@ -6,6 +6,7 @@ import "./App.css";
 import { AboutDialog } from "./components/AboutDialog";
 import { ConfirmDiscardModal } from "./components/ConfirmDiscardModal";
 import { LargeFileOpenModal } from "./components/LargeFileOpenModal";
+import { FileLoadingModal } from "./components/FileLoadingModal";
 import { MenuBar } from "./components/MenuBar";
 import { createCommandRegistry } from "./core/commands/commandRegistry";
 import { buildCommands } from "./core/commands/buildCommands";
@@ -28,11 +29,19 @@ import {
   openTextFilePath,
   readTextFileAtPath,
   saveTextFile,
-  saveTextFileAs
+  saveTextFileAs,
+  streamReadTextFileAtPath
 } from "./core/files/fileService";
 import { createSettingsStore } from "./core/settings/settingsStore";
 import { chooseEditorFont } from "./core/fonts/fontDialog";
-import { takeLaunchFileArg, type LaunchFileArg } from "./core/window/launchArgService";
+import {
+  cancelLaunchFileStream,
+  closeLaunchFileStream,
+  readLaunchFileChunk,
+  startLaunchFileStream,
+  takeLaunchFileArg,
+  type LaunchFileArg
+} from "./core/window/launchArgService";
 
 const MAIN_WINDOW_LABEL = "main";
 const PLATFORM_IS_MAC = navigator.userAgent.toLowerCase().includes("mac");
@@ -112,8 +121,15 @@ function App() {
     fileIo: {
       getFileSize,
       readTextFile: readTextFileAtPath,
+      streamReadTextFile: streamReadTextFileAtPath,
       saveTextFile,
       getDirectoryFromFilePath
+    },
+    launchFileStream: {
+      startLaunchFileStream,
+      readLaunchFileChunk,
+      cancelLaunchFileStream,
+      closeLaunchFileStream
     },
     fontPicker: {
       chooseEditorFont
@@ -154,15 +170,23 @@ function App() {
     setMenuPanelOpen: menuState.setMenuPanelOpen,
     setActiveMenuId: menuState.setActiveMenuId,
     commandRegistry,
-    focusEditor: () => editorAdapter.focus()
+    focusEditor: () => editorAdapter.focus(),
+    isInteractionBlocked: fileLifecycle.loadingState.isLoading
   });
 
   const shortcutRouter = createShortcutRouter({
     definitions,
-    execute: (commandId) => commandRegistry.execute(commandId)
+    execute: (commandId) => {
+      if (fileLifecycle.loadingState.isLoading()) {
+        return Promise.resolve(false);
+      }
+      return commandRegistry.execute(commandId);
+    }
   });
 
   const { handleGlobalKeydown } = useGlobalKeyRouting({
+    fileLoading: fileLifecycle.loadingState.isLoading,
+    requestCancelFileLoad: fileLifecycle.requestCancelLoading,
     aboutOpen,
     confirmDiscardOpen: closeFlow.confirmDiscardOpen,
     resolveConfirmDiscard: closeFlow.resolveConfirmDiscard,
@@ -196,11 +220,8 @@ function App() {
     takeLaunchFileArg,
     openLaunchFileArg: async (launchFile: LaunchFileArg) => {
       if (launchFile.exists) {
-        if (typeof launchFile.text === "string") {
-          await fileLifecycle.openFileFromTextAtPath(launchFile.path, launchFile.text);
-          return;
-        }
-        throw new Error(`Launch payload missing text for existing file: ${launchFile.path}`);
+        await fileLifecycle.openLaunchFileAtPath(launchFile.path, launchFile.fileSizeBytes);
+        return;
       }
       await fileLifecycle.openMissingFileAtPath(launchFile.path);
     },
@@ -241,6 +262,10 @@ function App() {
             <div ref={editorHostRef} class="editor-host" />
           </section>
 
+          <Show when={fileLifecycle.safeModeActive()}>
+            <div class="large-line-safe-banner">Opened in large-line safe mode for stability.</div>
+          </Show>
+
           <ConfirmDiscardModal
             open={closeFlow.confirmDiscardOpen()}
             onCancel={() => void closeFlow.resolveConfirmDiscard(false)}
@@ -279,6 +304,19 @@ function App() {
               }
               closeLargeFileDialog();
             }}
+          />
+
+          <Show when={fileLifecycle.loadingState.isLoading() && !fileLifecycle.loadingState.showLoadingOverlay()}>
+            <div class="file-loading-hit-blocker" aria-hidden="true" />
+          </Show>
+
+          <FileLoadingModal
+            open={fileLifecycle.loadingState.showLoadingOverlay()}
+            filePath={fileLifecycle.loadingState.loadingFilePath()}
+            bytesRead={fileLifecycle.loadingState.loadingBytesRead()}
+            totalBytes={fileLifecycle.loadingState.loadingTotalBytes()}
+            largeLineSafeMode={fileLifecycle.loadingState.loadingLargeLineSafeMode()}
+            onCancel={fileLifecycle.requestCancelLoading}
           />
         </main>
       </MenuProvider>

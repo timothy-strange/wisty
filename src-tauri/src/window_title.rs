@@ -111,10 +111,7 @@ fn log_warn(message: &str) {
 
     let args = format_args!("{message}");
 
-    let record = Record::builder()
-        .metadata(metadata)
-        .args(args)
-        .build();
+    let record = Record::builder().metadata(metadata).args(args).build();
 
     log::logger().log(&record);
 }

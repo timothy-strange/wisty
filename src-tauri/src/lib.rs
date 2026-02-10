@@ -1,7 +1,9 @@
 use log::LevelFilter;
 use serde::Serialize;
+use std::collections::HashMap;
+use std::fs::File;
 use std::io::ErrorKind;
-use std::io::{IsTerminal, Write};
+use std::io::{IsTerminal, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -34,17 +36,66 @@ struct EditorFontInput {
 struct LaunchFileArg {
     path: String,
     exists: bool,
-    text: Option<String>,
+    #[serde(rename = "fileSizeBytes")]
+    file_size_bytes: Option<u64>,
+}
+
+struct LaunchFileStream {
+    file: File,
+    file_path: String,
+    file_size_bytes: u64,
+    bytes_read_total: u64,
+    utf8_carry: Vec<u8>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LaunchFileStreamStartResult {
+    stream_id: String,
+    file_path: String,
+    file_size_bytes: u64,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+enum LaunchFileStreamChunkResult {
+    Chunk {
+        text: String,
+        #[serde(rename = "bytesReadTotal")]
+        bytes_read_total: u64,
+        #[serde(rename = "fileSizeBytes")]
+        file_size_bytes: u64,
+    },
+    Eof {
+        #[serde(rename = "bytesReadTotal")]
+        bytes_read_total: u64,
+        #[serde(rename = "fileSizeBytes")]
+        file_size_bytes: u64,
+    },
 }
 
 struct LaunchArgState {
     pending_file: Mutex<Option<LaunchFileArg>>,
+    approved_launch_file_path: Option<String>,
+    stream_counter: Mutex<u64>,
+    active_streams: Mutex<HashMap<String, LaunchFileStream>>,
 }
 
 impl LaunchArgState {
     fn new(pending_file: Option<LaunchFileArg>) -> Self {
+        let approved_launch_file_path = pending_file.as_ref().and_then(|file| {
+            if file.exists {
+                Some(file.path.clone())
+            } else {
+                None
+            }
+        });
+
         Self {
             pending_file: Mutex::new(pending_file),
+            approved_launch_file_path,
+            stream_counter: Mutex::new(0),
+            active_streams: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -163,18 +214,23 @@ fn validate_launch_file_arg(path: &Path) -> Result<LaunchFileArg, String> {
     match std::fs::metadata(path) {
         Ok(metadata) => {
             if !metadata.is_file() {
-                return Err(format!("Path is not a regular file: {}", path.to_string_lossy()));
+                return Err(format!(
+                    "Path is not a regular file: {}",
+                    path.to_string_lossy()
+                ));
             }
             confirm_large_cli_open(path, metadata.len())?;
-            let canonical_path = std::fs::canonicalize(path)
-                .map_err(|error| format!("Unable to normalize file path '{}': {error}", path.to_string_lossy()))?;
-            let text = std::fs::read_to_string(&canonical_path)
-                .map_err(|error| format!("Unable to read file '{}': {error}", canonical_path.to_string_lossy()))?;
+            let canonical_path = std::fs::canonicalize(path).map_err(|error| {
+                format!(
+                    "Unable to normalize file path '{}': {error}",
+                    path.to_string_lossy()
+                )
+            })?;
 
             Ok(LaunchFileArg {
                 path: canonical_path.to_string_lossy().to_string(),
                 exists: true,
-                text: Some(text),
+                file_size_bytes: Some(metadata.len()),
             })
         }
         Err(error) if error.kind() == ErrorKind::NotFound => {
@@ -216,7 +272,7 @@ fn validate_launch_file_arg(path: &Path) -> Result<LaunchFileArg, String> {
             Ok(LaunchFileArg {
                 path: normalized_path.to_string_lossy().to_string(),
                 exists: false,
-                text: None,
+                file_size_bytes: None,
             })
         }
         Err(error) => Err(format!(
@@ -364,16 +420,170 @@ fn take_launch_file_arg(
         .lock()
         .map_err(|error| format!("Unable to read launch args state: {error}"))?;
 
-    if let Some(launch_file) = guard.as_ref() {
-        if launch_file.exists && launch_file.text.is_none() {
-            return Err(format!(
-                "Invalid startup payload: existing file has no text: {}",
-                launch_file.path
-            ));
+    Ok(guard.take())
+}
+
+fn split_utf8_prefix(input: &[u8]) -> Result<(String, Vec<u8>), String> {
+    match std::str::from_utf8(input) {
+        Ok(text) => Ok((text.to_string(), Vec::new())),
+        Err(error) => {
+            let valid_up_to = error.valid_up_to();
+            if let Some(_error_len) = error.error_len() {
+                return Err("Launch stream contains invalid UTF-8 data".to_string());
+            }
+
+            let valid = std::str::from_utf8(&input[..valid_up_to])
+                .map_err(|_| "Failed to decode launch stream UTF-8 prefix".to_string())?;
+
+            Ok((valid.to_string(), input[valid_up_to..].to_vec()))
         }
     }
+}
 
-    Ok(guard.take())
+#[tauri::command]
+fn start_launch_file_stream(
+    state: tauri::State<'_, LaunchArgState>,
+    file_path: String,
+) -> Result<LaunchFileStreamStartResult, String> {
+    let approved_path = state
+        .approved_launch_file_path
+        .as_ref()
+        .ok_or_else(|| "No launch file is available for streaming".to_string())?;
+
+    if &file_path != approved_path {
+        return Err("Requested path is not an approved launch file".to_string());
+    }
+
+    let metadata = std::fs::metadata(&file_path).map_err(|error| {
+        format!(
+            "Unable to read launch file metadata '{}': {error}",
+            file_path
+        )
+    })?;
+    if !metadata.is_file() {
+        return Err(format!("Launch path is not a regular file: {}", file_path));
+    }
+
+    let file = File::open(&file_path)
+        .map_err(|error| format!("Unable to open launch file '{}': {error}", file_path))?;
+
+    let stream_id = {
+        let mut counter = state
+            .stream_counter
+            .lock()
+            .map_err(|error| format!("Unable to allocate launch stream id: {error}"))?;
+        *counter += 1;
+        format!("launch-{}", *counter)
+    };
+
+    {
+        let mut streams = state
+            .active_streams
+            .lock()
+            .map_err(|error| format!("Unable to store launch stream state: {error}"))?;
+        streams.insert(
+            stream_id.clone(),
+            LaunchFileStream {
+                file,
+                file_path: file_path.clone(),
+                file_size_bytes: metadata.len(),
+                bytes_read_total: 0,
+                utf8_carry: Vec::new(),
+            },
+        );
+    }
+
+    Ok(LaunchFileStreamStartResult {
+        stream_id,
+        file_path,
+        file_size_bytes: metadata.len(),
+    })
+}
+
+#[tauri::command]
+fn read_launch_file_chunk(
+    state: tauri::State<'_, LaunchArgState>,
+    stream_id: String,
+    max_bytes: usize,
+) -> Result<LaunchFileStreamChunkResult, String> {
+    let mut streams = state
+        .active_streams
+        .lock()
+        .map_err(|error| format!("Unable to read launch stream state: {error}"))?;
+
+    let stream = streams
+        .get_mut(&stream_id)
+        .ok_or_else(|| format!("Launch stream '{}' not found", stream_id))?;
+
+    let read_size = max_bytes.clamp(4 * 1024, 1024 * 1024);
+    let mut buffer = vec![0_u8; read_size];
+    let read_count = stream
+        .file
+        .read(&mut buffer)
+        .map_err(|error| format!("Unable to read launch file '{}': {error}", stream.file_path))?;
+
+    if read_count == 0 {
+        if stream.utf8_carry.is_empty() {
+            return Ok(LaunchFileStreamChunkResult::Eof {
+                bytes_read_total: stream.bytes_read_total,
+                file_size_bytes: stream.file_size_bytes,
+            });
+        }
+
+        let trailing = std::str::from_utf8(&stream.utf8_carry)
+            .map_err(|_| "Launch stream ended with invalid UTF-8 sequence".to_string())?
+            .to_string();
+        stream.utf8_carry.clear();
+
+        return Ok(LaunchFileStreamChunkResult::Chunk {
+            text: trailing,
+            bytes_read_total: stream.bytes_read_total,
+            file_size_bytes: stream.file_size_bytes,
+        });
+    }
+
+    stream.bytes_read_total += read_count as u64;
+
+    let mut combined = Vec::with_capacity(stream.utf8_carry.len() + read_count);
+    if !stream.utf8_carry.is_empty() {
+        combined.extend_from_slice(&stream.utf8_carry);
+    }
+    combined.extend_from_slice(&buffer[..read_count]);
+
+    let (decoded, carry) = split_utf8_prefix(&combined)?;
+    stream.utf8_carry = carry;
+
+    Ok(LaunchFileStreamChunkResult::Chunk {
+        text: decoded,
+        bytes_read_total: stream.bytes_read_total,
+        file_size_bytes: stream.file_size_bytes,
+    })
+}
+
+#[tauri::command]
+fn cancel_launch_file_stream(
+    state: tauri::State<'_, LaunchArgState>,
+    stream_id: String,
+) -> Result<(), String> {
+    let mut streams = state
+        .active_streams
+        .lock()
+        .map_err(|error| format!("Unable to cancel launch stream state: {error}"))?;
+    streams.remove(&stream_id);
+    Ok(())
+}
+
+#[tauri::command]
+fn close_launch_file_stream(
+    state: tauri::State<'_, LaunchArgState>,
+    stream_id: String,
+) -> Result<(), String> {
+    let mut streams = state
+        .active_streams
+        .lock()
+        .map_err(|error| format!("Unable to close launch stream state: {error}"))?;
+    streams.remove(&stream_id);
+    Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -414,6 +624,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             choose_editor_font,
             take_launch_file_arg,
+            start_launch_file_stream,
+            read_launch_file_chunk,
+            cancel_launch_file_stream,
+            close_launch_file_stream,
             window_title::set_window_title
         ])
         .run(tauri::generate_context!())

@@ -63,12 +63,6 @@ export const createSettingsStore = () => {
     await saveSetting("highlightCurrentLineEnabled", enabled);
   };
 
-  const setFindReplaceFontSize = async (fontSize: number) => {
-    const next = clamp(Math.round(fontSize), 9, 28);
-    setState({ findReplaceFontSize: next });
-    await saveSetting("findReplaceFontSize", next);
-  };
-
   const setLastDirectory = async (lastDirectory: string) => {
     setState({ lastDirectory });
     await saveSetting("lastDirectory", lastDirectory);
@@ -84,7 +78,6 @@ export const createSettingsStore = () => {
     const loadedFontWeight = await backingStore.get("fontWeight");
     const loadedTextWrapEnabled = await backingStore.get("textWrapEnabled");
     const loadedHighlightCurrentLine = await backingStore.get("highlightCurrentLineEnabled");
-    const loadedFindReplaceFontSize = await backingStore.get("findReplaceFontSize");
     const loadedLastDirectory = await backingStore.get("lastDirectory");
 
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -101,9 +94,6 @@ export const createSettingsStore = () => {
       highlightCurrentLineEnabled: typeof loadedHighlightCurrentLine === "boolean"
         ? loadedHighlightCurrentLine
         : DEFAULT_SETTINGS.highlightCurrentLineEnabled,
-      findReplaceFontSize: typeof loadedFindReplaceFontSize === "number"
-        ? clamp(loadedFindReplaceFontSize, 9, 28)
-        : DEFAULT_SETTINGS.findReplaceFontSize,
       lastDirectory: typeof loadedLastDirectory === "string" ? loadedLastDirectory : DEFAULT_SETTINGS.lastDirectory
     });
 
@@ -122,7 +112,6 @@ export const createSettingsStore = () => {
       setFontWeight,
       setTextWrapEnabled,
       setHighlightCurrentLineEnabled,
-      setFindReplaceFontSize,
       setLastDirectory
     }
   };

@@ -1,5 +1,5 @@
-import { open, save } from "@tauri-apps/plugin-dialog";
-import { readTextFile, stat, writeTextFile } from "@tauri-apps/plugin-fs";
+import { open as openDialog, save } from "@tauri-apps/plugin-dialog";
+import { open as openFile, readTextFile, stat, writeTextFile } from "@tauri-apps/plugin-fs";
 
 export type OpenFileResult =
   | { kind: "cancelled" }
@@ -29,6 +29,20 @@ const directoryFromPath = (filePath: string): string => {
   return lastSlash <= 0 ? "" : normalized.slice(0, lastSlash);
 };
 
+const DEFAULT_STREAM_CHUNK_BYTES = 256 * 1024;
+const MIN_STREAM_CHUNK_BYTES = 4 * 1024;
+
+const normalizeChunkSizeBytes = (chunkSizeBytes?: number): number => {
+  if (typeof chunkSizeBytes !== "number" || !Number.isFinite(chunkSizeBytes)) {
+    return DEFAULT_STREAM_CHUNK_BYTES;
+  }
+  const normalized = Math.floor(chunkSizeBytes);
+  if (normalized < MIN_STREAM_CHUNK_BYTES) {
+    return MIN_STREAM_CHUNK_BYTES;
+  }
+  return normalized;
+};
+
 export const openTextFile = async (defaultPath?: string): Promise<OpenFileResult> => {
   const selectedPath = await openTextFilePath(defaultPath);
   if (selectedPath.kind === "cancelled") {
@@ -44,7 +58,7 @@ export const openTextFile = async (defaultPath?: string): Promise<OpenFileResult
 };
 
 export const openTextFilePath = async (defaultPath?: string): Promise<OpenFilePathResult> => {
-  const selected = normalizeDialogPath(await open({
+  const selected = normalizeDialogPath(await openDialog({
     multiple: false,
     defaultPath: defaultPath || undefined
   }));
@@ -77,6 +91,56 @@ export const saveTextFile = async (filePath: string, text: string): Promise<void
 
 export const readTextFileAtPath = async (filePath: string): Promise<string> => {
   return readTextFile(filePath);
+};
+
+export const streamReadTextFileAtPath = async function* (
+  filePath: string,
+  options?: { chunkSizeBytes?: number }
+): AsyncGenerator<{ text: string; bytesReadTotal: number; fileSizeBytes?: number }, void, void> {
+  const fileInfo = await stat(filePath);
+  const fileSizeBytes = fileInfo.size;
+  const chunkSizeBytes = normalizeChunkSizeBytes(options?.chunkSizeBytes);
+  const buffer = new Uint8Array(chunkSizeBytes);
+  const decoder = new TextDecoder();
+
+  const handle = await openFile(filePath, { read: true });
+  let bytesReadTotal = 0;
+
+  try {
+    while (true) {
+      const readCount = await handle.read(buffer);
+      if (readCount === null || readCount <= 0) {
+        break;
+      }
+
+      bytesReadTotal += readCount;
+      const text = decoder.decode(buffer.subarray(0, readCount), { stream: true });
+      if (typeof text !== "string") {
+        throw new Error(`Decoder produced non-string chunk for '${filePath}'`);
+      }
+      if (text) {
+        yield {
+          text,
+          bytesReadTotal,
+          fileSizeBytes
+        };
+      }
+    }
+
+    const trailingText = decoder.decode();
+    if (typeof trailingText !== "string") {
+      throw new Error(`Decoder produced non-string trailing chunk for '${filePath}'`);
+    }
+    if (trailingText) {
+      yield {
+        text: trailingText,
+        bytesReadTotal,
+        fileSizeBytes
+      };
+    }
+  } finally {
+    await handle.close();
+  }
 };
 
 export const getFileSize = async (filePath: string): Promise<number> => {

@@ -1,4 +1,5 @@
 import type { CommandDefinition, MenuSection } from "./commandRegistry";
+import type { Accessor } from "solid-js";
 
 type BuildCommandsDeps = {
   platform: {
@@ -14,6 +15,7 @@ type BuildCommandsDeps = {
     saveFile: () => Promise<void>;
     saveFileAs: () => Promise<void>;
     chooseEditorFont: () => Promise<void>;
+    safeModeActive: Accessor<boolean>;
   };
   editor: {
     undoEdit: () => boolean;
@@ -153,14 +155,16 @@ export const buildCommands = (deps: BuildCommandsDeps): { definitions: CommandDe
       label: "Text Wrap",
       refocusEditorOnMenuSelect: true,
       run: () => deps.settings.actions.setTextWrapEnabled(!deps.settings.state.textWrapEnabled),
-      checked: () => deps.settings.state.textWrapEnabled
+      enabled: () => !deps.fileLifecycle.safeModeActive(),
+      checked: () => !deps.fileLifecycle.safeModeActive() && deps.settings.state.textWrapEnabled
     },
     {
       id: "view.highlight.current",
       label: "Highlight Current Line",
       refocusEditorOnMenuSelect: true,
       run: () => deps.settings.actions.setHighlightCurrentLineEnabled(!deps.settings.state.highlightCurrentLineEnabled),
-      checked: () => deps.settings.state.highlightCurrentLineEnabled
+      enabled: () => !deps.fileLifecycle.safeModeActive(),
+      checked: () => !deps.fileLifecycle.safeModeActive() && deps.settings.state.highlightCurrentLineEnabled
     },
     {
       id: "view.font.browser",
