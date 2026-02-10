@@ -1,14 +1,9 @@
-import { Show, createEffect, createSignal } from "solid-js";
+import { createEffect, createSignal } from "solid-js";
 import { getVersion } from "@tauri-apps/api/app";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { message } from "@tauri-apps/plugin-dialog";
 import "./App.css";
-import { AboutDialog } from "./components/AboutDialog";
-import { ConfirmDiscardModal } from "./components/ConfirmDiscardModal";
-import { LargeFileOpenModal } from "./components/LargeFileOpenModal";
-import { FileLoadingModal } from "./components/FileLoadingModal";
-import { FileSavingModal } from "./components/FileSavingModal";
-import { MenuBar } from "./components/MenuBar";
+import { AppShell } from "./components/AppShell";
 import { createCommandRegistry } from "./core/commands/commandRegistry";
 import { buildCommands } from "./core/commands/buildCommands";
 import { createShortcutRouter } from "./core/commands/shortcutRouter";
@@ -39,7 +34,7 @@ import {
   cancelSaveFileStream,
   finishSaveFileStream,
   startSaveFileStream,
-  writeSaveFileChunk,
+  writeSaveFileChunk
 } from "./core/window/saveStreamService";
 import {
   cancelLaunchFileStream,
@@ -273,78 +268,64 @@ function App() {
   return (
     <CommandsProvider value={commandsContextValue}>
       <MenuProvider value={menuContextValue}>
-        <main class="app-shell">
-          <MenuBar />
-
-          <section class="editor-shell">
-            <div ref={editorHostRef} class="editor-host" />
-          </section>
-
-          <Show when={fileLifecycle.safeModeActive()}>
-            <div class="large-line-safe-banner">Opened in large-line safe mode for stability.</div>
-          </Show>
-
-          <ConfirmDiscardModal
-            open={closeFlow.confirmDiscardOpen()}
-            onCancel={() => void closeFlow.resolveConfirmDiscard(false)}
-            onDiscard={() => void closeFlow.resolveConfirmDiscard(true)}
-          />
-
-          <AboutDialog
-            open={aboutOpen()}
-            version={appVersion()}
-            onClose={closeAboutDialog}
-          />
-
-          <LargeFileOpenModal
-            open={largeFileDialog() !== null}
-            kind={largeFileDialog()?.kind ?? "confirm"}
-            filePath={largeFileDialog()?.filePath ?? ""}
-            sizeBytes={largeFileDialog()?.sizeBytes ?? 0}
-            onCancel={() => {
+        <AppShell
+          setEditorHostRef={(node) => {
+            editorHostRef = node;
+          }}
+          safeModeActive={fileLifecycle.safeModeActive()}
+          aboutOpen={aboutOpen()}
+          appVersion={appVersion()}
+          confirmDiscardOpen={closeFlow.confirmDiscardOpen()}
+          onConfirmDiscardCancel={() => void closeFlow.resolveConfirmDiscard(false)}
+          onConfirmDiscard={() => void closeFlow.resolveConfirmDiscard(true)}
+          onAboutClose={closeAboutDialog}
+          largeFileDialog={{
+            open: largeFileDialog() !== null,
+            kind: largeFileDialog()?.kind ?? "confirm",
+            filePath: largeFileDialog()?.filePath ?? "",
+            sizeBytes: largeFileDialog()?.sizeBytes ?? 0,
+            onCancel: () => {
               const state = largeFileDialog();
               if (state?.kind === "confirm") {
                 state.resolve(false);
               }
               closeLargeFileDialog();
-            }}
-            onOpenAnyway={() => {
+            },
+            onOpenAnyway: () => {
               const state = largeFileDialog();
               if (state?.kind === "confirm") {
                 state.resolve(true);
               }
               closeLargeFileDialog();
-            }}
-            onAcknowledge={() => {
+            },
+            onAcknowledge: () => {
               const state = largeFileDialog();
               if (state?.kind === "blocked") {
                 state.resolve();
               }
               closeLargeFileDialog();
-            }}
-          />
-
-          <Show when={(fileLifecycle.loadingState.isLoading() && !fileLifecycle.loadingState.showLoadingOverlay()) || (fileLifecycle.savingState.isSaving() && !fileLifecycle.savingState.showSavingOverlay())}>
-            <div class="file-loading-hit-blocker" aria-hidden="true" />
-          </Show>
-
-          <FileLoadingModal
-            open={fileLifecycle.loadingState.showLoadingOverlay()}
-            filePath={fileLifecycle.loadingState.loadingFilePath()}
-            bytesRead={fileLifecycle.loadingState.loadingBytesRead()}
-            totalBytes={fileLifecycle.loadingState.loadingTotalBytes()}
-            largeLineSafeMode={fileLifecycle.loadingState.loadingLargeLineSafeMode()}
-            onCancel={fileLifecycle.requestCancelLoading}
-          />
-
-          <FileSavingModal
-            open={fileLifecycle.savingState.showSavingOverlay()}
-            filePath={fileLifecycle.savingState.savingFilePath()}
-            charsWritten={fileLifecycle.savingState.savingCharsWritten()}
-            totalChars={fileLifecycle.savingState.savingTotalChars()}
-            onCancel={fileLifecycle.requestCancelSaving}
-          />
-        </main>
+            }
+          }}
+          showTransferHitBlocker={
+            (fileLifecycle.loadingState.isLoading() && !fileLifecycle.loadingState.showLoadingOverlay())
+            || (fileLifecycle.savingState.isSaving() && !fileLifecycle.savingState.showSavingOverlay())
+          }
+          loading={{
+            overlayOpen: fileLifecycle.loadingState.showLoadingOverlay(),
+            filePath: fileLifecycle.loadingState.loadingFilePath(),
+            bytesRead: fileLifecycle.loadingState.loadingBytesRead(),
+            totalBytes: fileLifecycle.loadingState.loadingTotalBytes(),
+            largeLineSafeMode: fileLifecycle.loadingState.loadingLargeLineSafeMode(),
+            onCancel: fileLifecycle.requestCancelLoading
+          }}
+          saving={{
+            overlayOpen: fileLifecycle.savingState.showSavingOverlay(),
+            filePath: fileLifecycle.savingState.savingFilePath(),
+            charsWritten: fileLifecycle.savingState.savingCharsWritten(),
+            totalChars: fileLifecycle.savingState.savingTotalChars(),
+            onCancel: fileLifecycle.requestCancelSaving
+          }}
+        />
       </MenuProvider>
     </CommandsProvider>
   );
