@@ -63,7 +63,7 @@ export type LaunchFileStreamPort = {
 export type FileDialogsPort = {
   openTextFile: (defaultPath?: string) => Promise<OpenTextFileResult>;
   openTextFilePath: (defaultPath?: string) => Promise<OpenTextFilePathResult>;
-  saveTextFileAs: (text: string, defaultPath?: string) => Promise<SaveTextFileAsResult>;
+  saveTextFilePathAs: (defaultPath?: string) => Promise<SaveTextFileAsResult>;
 };
 
 export type FileIoPort = {
@@ -90,6 +90,8 @@ export type ResetEditorOptions = {
 export type EditorPort = {
   focus: () => void;
   getText: () => string;
+  getDocLength: () => number;
+  getTextSlice: (from: number, to: number) => string;
   getRevision: () => number;
   setText: (text: string, options?: { emitChange?: boolean }) => void;
   append: (text: string, options?: AppendTextOptions) => void;

@@ -11,7 +11,7 @@ import { createSignal } from "solid-js";
 import type { LaunchFileStreamChunkResult } from "../window/launchArgService";
 
 type UseFileLifecycleDeps = {
-  editor: Pick<EditorPort, "focus" | "getText" | "setText" | "append" | "reset" | "setLargeLineSafeMode" | "getRevision">;
+  editor: Pick<EditorPort, "focus" | "getText" | "getDocLength" | "getTextSlice" | "setText" | "append" | "reset" | "setLargeLineSafeMode" | "getRevision">;
   document: Pick<DocumentPort, "state" | "setRevision" | "markCleanAt" | "setFilePath" | "setUntitled">;
   settings: Pick<SettingsPort, "state" | "actions">;
   fileDialogs: FileDialogsPort;
@@ -21,6 +21,12 @@ type UseFileLifecycleDeps = {
     readLaunchFileChunk: (streamId: string, maxBytes: number) => Promise<LaunchFileStreamChunkResult>;
     cancelLaunchFileStream: (streamId: string) => Promise<void>;
     closeLaunchFileStream: (streamId: string) => Promise<void>;
+  };
+  saveFileStream: {
+    startSaveFileStream: (filePath: string) => Promise<{ streamId: string; filePath: string }>;
+    writeSaveFileChunk: (streamId: string, textChunk: string) => Promise<{ bytesWrittenTotal: number }>;
+    finishSaveFileStream: (streamId: string) => Promise<{ bytesWrittenTotal: number }>;
+    cancelSaveFileStream: (streamId: string) => Promise<void>;
   };
   fontPicker: FontPickerPort;
   errors: ErrorReporter;
@@ -35,6 +41,8 @@ const BATCH_NORMAL_BYTES = 1024 * 1024;
 const BATCH_SAFE_MODE_BYTES = 256 * 1024;
 const SAFE_MODE_PROBE_BYTES = 8 * 1024 * 1024;
 const LAUNCH_STREAM_READ_BYTES = 256 * 1024;
+const SAVE_STREAM_CHUNK_CHARS = 256 * 1024;
+const SAVING_OVERLAY_DELAY_MS = 500;
 
 class FileLoadCancelledError extends Error {
   constructor() {
@@ -45,6 +53,16 @@ class FileLoadCancelledError extends Error {
 
 const isFileLoadCancelledError = (error: unknown): error is FileLoadCancelledError =>
   error instanceof FileLoadCancelledError;
+
+class FileSaveCancelledError extends Error {
+  constructor() {
+    super("File save cancelled");
+    this.name = "FileSaveCancelledError";
+  }
+}
+
+const isFileSaveCancelledError = (error: unknown): error is FileSaveCancelledError =>
+  error instanceof FileSaveCancelledError;
 
 const waitForNextFrame = () => new Promise<void>((resolve) => {
   if (typeof requestAnimationFrame === "function") {
@@ -63,9 +81,17 @@ export const useFileLifecycle = (deps: UseFileLifecycleDeps) => {
   const [loadingLargeLineSafeMode, setLoadingLargeLineSafeMode] = createSignal(false);
   const [safeModeActive, setSafeModeActive] = createSignal(false);
   const [cancelRequested, setCancelRequested] = createSignal(false);
+  const [isSaving, setIsSaving] = createSignal(false);
+  const [showSavingOverlay, setShowSavingOverlay] = createSignal(false);
+  const [savingFilePath, setSavingFilePath] = createSignal("");
+  const [savingCharsWritten, setSavingCharsWritten] = createSignal(0);
+  const [savingTotalChars, setSavingTotalChars] = createSignal<number | undefined>(undefined);
+  const [saveCancelRequested, setSaveCancelRequested] = createSignal(false);
 
   let activeLoadId = 0;
   let loadingOverlayTimer: ReturnType<typeof setTimeout> | null = null;
+  let activeSaveId = 0;
+  let savingOverlayTimer: ReturnType<typeof setTimeout> | null = null;
 
   const beginLoadingState = (filePath: string) => {
     activeLoadId += 1;
@@ -114,6 +140,51 @@ export const useFileLifecycle = (deps: UseFileLifecycleDeps) => {
     setCancelRequested(true);
   };
 
+  const beginSavingState = (filePath: string, totalChars: number) => {
+    activeSaveId += 1;
+    const saveId = activeSaveId;
+    setIsSaving(true);
+    setShowSavingOverlay(false);
+    setSavingFilePath(filePath);
+    setSavingCharsWritten(0);
+    setSavingTotalChars(totalChars);
+    setSaveCancelRequested(false);
+    if (savingOverlayTimer !== null) {
+      clearTimeout(savingOverlayTimer);
+      savingOverlayTimer = null;
+    }
+    savingOverlayTimer = setTimeout(() => {
+      if (!isSaving() || activeSaveId !== saveId) {
+        return;
+      }
+      setShowSavingOverlay(true);
+    }, SAVING_OVERLAY_DELAY_MS);
+    return saveId;
+  };
+
+  const endSavingState = (saveId: number) => {
+    if (activeSaveId !== saveId) {
+      return;
+    }
+    if (savingOverlayTimer !== null) {
+      clearTimeout(savingOverlayTimer);
+      savingOverlayTimer = null;
+    }
+    setIsSaving(false);
+    setShowSavingOverlay(false);
+    setSavingFilePath("");
+    setSavingCharsWritten(0);
+    setSavingTotalChars(undefined);
+    setSaveCancelRequested(false);
+  };
+
+  const requestCancelSaving = () => {
+    if (!isSaving()) {
+      return;
+    }
+    setSaveCancelRequested(true);
+  };
+
   const applySafeMode = (enabled: boolean) => {
     setSafeModeActive(enabled);
     deps.editor.setLargeLineSafeMode(enabled);
@@ -124,6 +195,10 @@ export const useFileLifecycle = (deps: UseFileLifecycleDeps) => {
       await action();
     } catch (error) {
       if (isFileLoadCancelledError(error)) {
+        deps.editor.focus();
+        return;
+      }
+      if (isFileSaveCancelledError(error)) {
         deps.editor.focus();
         return;
       }
@@ -394,14 +469,60 @@ export const useFileLifecycle = (deps: UseFileLifecycleDeps) => {
     deps.editor.focus();
   };
 
+  const saveDocumentToPathViaStream = async (filePath: string) => {
+    const totalChars = deps.editor.getDocLength();
+    const saveId = beginSavingState(filePath, totalChars);
+    let streamId: string | undefined;
+    let finished = false;
+    let charsWritten = 0;
+
+    try {
+      const started = await deps.saveFileStream.startSaveFileStream(filePath);
+      streamId = started.streamId;
+
+      for (let from = 0; from < totalChars; from += SAVE_STREAM_CHUNK_CHARS) {
+        if (activeSaveId !== saveId || saveCancelRequested()) {
+          throw new FileSaveCancelledError();
+        }
+
+        const to = Math.min(totalChars, from + SAVE_STREAM_CHUNK_CHARS);
+        const chunk = deps.editor.getTextSlice(from, to);
+        if (!chunk) {
+          continue;
+        }
+        await deps.saveFileStream.writeSaveFileChunk(streamId, chunk);
+        charsWritten += chunk.length;
+        setSavingCharsWritten(charsWritten);
+      }
+
+      if (activeSaveId !== saveId || saveCancelRequested()) {
+        throw new FileSaveCancelledError();
+      }
+
+      await deps.saveFileStream.finishSaveFileStream(streamId);
+      finished = true;
+      setSavingCharsWritten(totalChars);
+    } finally {
+      if (!finished && streamId) {
+        try {
+          await deps.saveFileStream.cancelSaveFileStream(streamId);
+        } catch {
+          // ignore cancellation errors during save teardown
+        }
+      }
+      endSavingState(saveId);
+    }
+  };
+
   const saveFileAs = async () => {
     await runWithErrorMessage(async () => {
-      const result = await deps.fileDialogs.saveTextFileAs(deps.editor.getText(), deps.settings.state.lastDirectory);
+      const result = await deps.fileDialogs.saveTextFilePathAs(deps.settings.state.lastDirectory);
       if (result.kind === "cancelled") {
         deps.editor.focus();
         return;
       }
 
+      await saveDocumentToPathViaStream(result.filePath);
       deps.document.setFilePath(result.filePath);
       deps.document.markCleanAt(deps.editor.getRevision());
       await deps.settings.actions.setLastDirectory(deps.fileIo.getDirectoryFromFilePath(result.filePath));
@@ -416,7 +537,7 @@ export const useFileLifecycle = (deps: UseFileLifecycleDeps) => {
     }
 
     await runWithErrorMessage(async () => {
-      await deps.fileIo.saveTextFile(deps.document.state.filePath, deps.editor.getText());
+      await saveDocumentToPathViaStream(deps.document.state.filePath);
       deps.document.markCleanAt(deps.editor.getRevision());
       await deps.settings.actions.setLastDirectory(deps.fileIo.getDirectoryFromFilePath(deps.document.state.filePath));
       deps.editor.focus();
@@ -454,6 +575,7 @@ export const useFileLifecycle = (deps: UseFileLifecycleDeps) => {
     saveFileAs,
     chooseEditorFont,
     requestCancelLoading,
+    requestCancelSaving,
     loadingState: {
       isLoading,
       showLoadingOverlay,
@@ -461,6 +583,13 @@ export const useFileLifecycle = (deps: UseFileLifecycleDeps) => {
       loadingBytesRead,
       loadingTotalBytes,
       loadingLargeLineSafeMode
+    },
+    savingState: {
+      isSaving,
+      showSavingOverlay,
+      savingFilePath,
+      savingCharsWritten,
+      savingTotalChars
     },
     safeModeActive
   };

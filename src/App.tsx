@@ -7,6 +7,7 @@ import { AboutDialog } from "./components/AboutDialog";
 import { ConfirmDiscardModal } from "./components/ConfirmDiscardModal";
 import { LargeFileOpenModal } from "./components/LargeFileOpenModal";
 import { FileLoadingModal } from "./components/FileLoadingModal";
+import { FileSavingModal } from "./components/FileSavingModal";
 import { MenuBar } from "./components/MenuBar";
 import { createCommandRegistry } from "./core/commands/commandRegistry";
 import { buildCommands } from "./core/commands/buildCommands";
@@ -29,11 +30,17 @@ import {
   openTextFilePath,
   readTextFileAtPath,
   saveTextFile,
-  saveTextFileAs,
+  saveTextFilePathAs,
   streamReadTextFileAtPath
 } from "./core/files/fileService";
 import { createSettingsStore } from "./core/settings/settingsStore";
 import { chooseEditorFont } from "./core/fonts/fontDialog";
+import {
+  cancelSaveFileStream,
+  finishSaveFileStream,
+  startSaveFileStream,
+  writeSaveFileChunk,
+} from "./core/window/saveStreamService";
 import {
   cancelLaunchFileStream,
   closeLaunchFileStream,
@@ -116,7 +123,7 @@ function App() {
     fileDialogs: {
       openTextFile,
       openTextFilePath,
-      saveTextFileAs
+      saveTextFilePathAs
     },
     fileIo: {
       getFileSize,
@@ -130,6 +137,12 @@ function App() {
       readLaunchFileChunk,
       cancelLaunchFileStream,
       closeLaunchFileStream
+    },
+    saveFileStream: {
+      startSaveFileStream,
+      writeSaveFileChunk,
+      finishSaveFileStream,
+      cancelSaveFileStream
     },
     fontPicker: {
       chooseEditorFont
@@ -165,19 +178,22 @@ function App() {
   });
 
   const commandRegistry = createCommandRegistry(definitions);
+  const isInteractionBlocked = () =>
+    fileLifecycle.loadingState.isLoading() || fileLifecycle.savingState.isSaving();
+
   const { handleMenuCommandSelected, handleMenuPanelOpenChange } = useMenuCommandPipeline({
     menuPanelOpen: menuState.menuPanelOpen,
     setMenuPanelOpen: menuState.setMenuPanelOpen,
     setActiveMenuId: menuState.setActiveMenuId,
     commandRegistry,
     focusEditor: () => editorAdapter.focus(),
-    isInteractionBlocked: fileLifecycle.loadingState.isLoading
+    isInteractionBlocked
   });
 
   const shortcutRouter = createShortcutRouter({
     definitions,
     execute: (commandId) => {
-      if (fileLifecycle.loadingState.isLoading()) {
+      if (isInteractionBlocked()) {
         return Promise.resolve(false);
       }
       return commandRegistry.execute(commandId);
@@ -187,6 +203,8 @@ function App() {
   const { handleGlobalKeydown } = useGlobalKeyRouting({
     fileLoading: fileLifecycle.loadingState.isLoading,
     requestCancelFileLoad: fileLifecycle.requestCancelLoading,
+    fileSaving: fileLifecycle.savingState.isSaving,
+    requestCancelFileSave: fileLifecycle.requestCancelSaving,
     aboutOpen,
     confirmDiscardOpen: closeFlow.confirmDiscardOpen,
     resolveConfirmDiscard: closeFlow.resolveConfirmDiscard,
@@ -306,7 +324,7 @@ function App() {
             }}
           />
 
-          <Show when={fileLifecycle.loadingState.isLoading() && !fileLifecycle.loadingState.showLoadingOverlay()}>
+          <Show when={(fileLifecycle.loadingState.isLoading() && !fileLifecycle.loadingState.showLoadingOverlay()) || (fileLifecycle.savingState.isSaving() && !fileLifecycle.savingState.showSavingOverlay())}>
             <div class="file-loading-hit-blocker" aria-hidden="true" />
           </Show>
 
@@ -317,6 +335,14 @@ function App() {
             totalBytes={fileLifecycle.loadingState.loadingTotalBytes()}
             largeLineSafeMode={fileLifecycle.loadingState.loadingLargeLineSafeMode()}
             onCancel={fileLifecycle.requestCancelLoading}
+          />
+
+          <FileSavingModal
+            open={fileLifecycle.savingState.showSavingOverlay()}
+            filePath={fileLifecycle.savingState.savingFilePath()}
+            charsWritten={fileLifecycle.savingState.savingCharsWritten()}
+            totalChars={fileLifecycle.savingState.savingTotalChars()}
+            onCancel={fileLifecycle.requestCancelSaving}
           />
         </main>
       </MenuProvider>

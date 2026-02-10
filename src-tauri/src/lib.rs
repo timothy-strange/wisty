@@ -2,6 +2,8 @@ use log::LevelFilter;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fs::File;
+use std::fs::OpenOptions;
+use std::io::BufWriter;
 use std::io::ErrorKind;
 use std::io::{IsTerminal, Read, Write};
 use std::path::{Path, PathBuf};
@@ -77,8 +79,36 @@ enum LaunchFileStreamChunkResult {
 struct LaunchArgState {
     pending_file: Mutex<Option<LaunchFileArg>>,
     approved_launch_file_path: Option<String>,
-    stream_counter: Mutex<u64>,
-    active_streams: Mutex<HashMap<String, LaunchFileStream>>,
+    launch_stream_counter: Mutex<u64>,
+    active_launch_streams: Mutex<HashMap<String, LaunchFileStream>>,
+    save_stream_counter: Mutex<u64>,
+    active_save_streams: Mutex<HashMap<String, SaveFileStream>>,
+}
+
+struct SaveFileStream {
+    target_path: PathBuf,
+    temp_path: PathBuf,
+    writer: BufWriter<File>,
+    bytes_written_total: u64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SaveFileStreamStartResult {
+    stream_id: String,
+    file_path: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SaveFileStreamWriteResult {
+    bytes_written_total: u64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SaveFileStreamFinishResult {
+    bytes_written_total: u64,
 }
 
 impl LaunchArgState {
@@ -94,8 +124,10 @@ impl LaunchArgState {
         Self {
             pending_file: Mutex::new(pending_file),
             approved_launch_file_path,
-            stream_counter: Mutex::new(0),
-            active_streams: Mutex::new(HashMap::new()),
+            launch_stream_counter: Mutex::new(0),
+            active_launch_streams: Mutex::new(HashMap::new()),
+            save_stream_counter: Mutex::new(0),
+            active_save_streams: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -469,7 +501,7 @@ fn start_launch_file_stream(
 
     let stream_id = {
         let mut counter = state
-            .stream_counter
+            .launch_stream_counter
             .lock()
             .map_err(|error| format!("Unable to allocate launch stream id: {error}"))?;
         *counter += 1;
@@ -478,7 +510,7 @@ fn start_launch_file_stream(
 
     {
         let mut streams = state
-            .active_streams
+            .active_launch_streams
             .lock()
             .map_err(|error| format!("Unable to store launch stream state: {error}"))?;
         streams.insert(
@@ -507,7 +539,7 @@ fn read_launch_file_chunk(
     max_bytes: usize,
 ) -> Result<LaunchFileStreamChunkResult, String> {
     let mut streams = state
-        .active_streams
+        .active_launch_streams
         .lock()
         .map_err(|error| format!("Unable to read launch stream state: {error}"))?;
 
@@ -566,7 +598,7 @@ fn cancel_launch_file_stream(
     stream_id: String,
 ) -> Result<(), String> {
     let mut streams = state
-        .active_streams
+        .active_launch_streams
         .lock()
         .map_err(|error| format!("Unable to cancel launch stream state: {error}"))?;
     streams.remove(&stream_id);
@@ -579,10 +611,196 @@ fn close_launch_file_stream(
     stream_id: String,
 ) -> Result<(), String> {
     let mut streams = state
-        .active_streams
+        .active_launch_streams
         .lock()
         .map_err(|error| format!("Unable to close launch stream state: {error}"))?;
     streams.remove(&stream_id);
+    Ok(())
+}
+
+fn build_save_temp_path(target_path: &Path, stream_id: &str) -> Result<PathBuf, String> {
+    let parent = target_path.parent().ok_or_else(|| {
+        format!(
+            "Cannot determine parent directory for '{}'",
+            target_path.to_string_lossy()
+        )
+    })?;
+
+    if !parent.exists() {
+        return Err(format!(
+            "Parent directory does not exist for '{}'",
+            target_path.to_string_lossy()
+        ));
+    }
+
+    if !parent.is_dir() {
+        return Err(format!(
+            "Parent path is not a directory for '{}'",
+            target_path.to_string_lossy()
+        ));
+    }
+
+    let file_name = target_path.file_name().ok_or_else(|| {
+        format!(
+            "Cannot determine file name for '{}'",
+            target_path.to_string_lossy()
+        )
+    })?;
+
+    let temp_name = format!(
+        ".{}.wisty-save-{}.tmp",
+        file_name.to_string_lossy(),
+        stream_id
+    );
+    Ok(parent.join(temp_name))
+}
+
+#[tauri::command]
+fn start_save_file_stream(
+    state: tauri::State<'_, LaunchArgState>,
+    file_path: String,
+) -> Result<SaveFileStreamStartResult, String> {
+    if file_path.trim().is_empty() {
+        return Err("Save path cannot be empty".to_string());
+    }
+
+    let target_path = PathBuf::from(&file_path);
+
+    let stream_id = {
+        let mut counter = state
+            .save_stream_counter
+            .lock()
+            .map_err(|error| format!("Unable to allocate save stream id: {error}"))?;
+        *counter += 1;
+        format!("save-{}", *counter)
+    };
+
+    let temp_path = build_save_temp_path(&target_path, &stream_id)?;
+    let file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temp_path)
+        .map_err(|error| {
+            format!(
+                "Unable to create temporary save file '{}': {error}",
+                temp_path.to_string_lossy()
+            )
+        })?;
+
+    let stream = SaveFileStream {
+        target_path,
+        temp_path,
+        writer: BufWriter::new(file),
+        bytes_written_total: 0,
+    };
+
+    {
+        let mut streams = state
+            .active_save_streams
+            .lock()
+            .map_err(|error| format!("Unable to store save stream state: {error}"))?;
+        streams.insert(stream_id.clone(), stream);
+    }
+
+    Ok(SaveFileStreamStartResult {
+        stream_id,
+        file_path,
+    })
+}
+
+#[tauri::command]
+fn write_save_file_chunk(
+    state: tauri::State<'_, LaunchArgState>,
+    stream_id: String,
+    text_chunk: String,
+) -> Result<SaveFileStreamWriteResult, String> {
+    let mut streams = state
+        .active_save_streams
+        .lock()
+        .map_err(|error| format!("Unable to read save stream state: {error}"))?;
+
+    let stream = streams
+        .get_mut(&stream_id)
+        .ok_or_else(|| format!("Save stream '{}' not found", stream_id))?;
+
+    let bytes = text_chunk.as_bytes();
+    stream.writer.write_all(bytes).map_err(|error| {
+        format!(
+            "Unable to write save chunk for '{}': {error}",
+            stream.target_path.to_string_lossy()
+        )
+    })?;
+
+    stream.bytes_written_total += bytes.len() as u64;
+
+    Ok(SaveFileStreamWriteResult {
+        bytes_written_total: stream.bytes_written_total,
+    })
+}
+
+#[tauri::command]
+fn finish_save_file_stream(
+    state: tauri::State<'_, LaunchArgState>,
+    stream_id: String,
+) -> Result<SaveFileStreamFinishResult, String> {
+    let mut stream = {
+        let mut streams = state
+            .active_save_streams
+            .lock()
+            .map_err(|error| format!("Unable to finalize save stream state: {error}"))?;
+        streams
+            .remove(&stream_id)
+            .ok_or_else(|| format!("Save stream '{}' not found", stream_id))?
+    };
+
+    stream.writer.flush().map_err(|error| {
+        format!(
+            "Unable to flush save stream for '{}': {error}",
+            stream.target_path.to_string_lossy()
+        )
+    })?;
+
+    drop(stream.writer);
+
+    std::fs::rename(&stream.temp_path, &stream.target_path).map_err(|error| {
+        format!(
+            "Unable to finalize save for '{}': {error}",
+            stream.target_path.to_string_lossy()
+        )
+    })?;
+
+    Ok(SaveFileStreamFinishResult {
+        bytes_written_total: stream.bytes_written_total,
+    })
+}
+
+#[tauri::command]
+fn cancel_save_file_stream(
+    state: tauri::State<'_, LaunchArgState>,
+    stream_id: String,
+) -> Result<(), String> {
+    let maybe_stream = {
+        let mut streams = state
+            .active_save_streams
+            .lock()
+            .map_err(|error| format!("Unable to cancel save stream state: {error}"))?;
+        streams.remove(&stream_id)
+    };
+
+    if let Some(stream) = maybe_stream {
+        drop(stream.writer);
+        match std::fs::remove_file(&stream.temp_path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(format!(
+                    "Unable to remove temporary save file '{}': {error}",
+                    stream.temp_path.to_string_lossy()
+                ))
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -628,6 +846,10 @@ pub fn run() {
             read_launch_file_chunk,
             cancel_launch_file_stream,
             close_launch_file_stream,
+            start_save_file_stream,
+            write_save_file_chunk,
+            finish_save_file_stream,
+            cancel_save_file_stream,
             window_title::set_window_title
         ])
         .run(tauri::generate_context!())

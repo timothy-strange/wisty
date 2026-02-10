@@ -285,6 +285,21 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
 
   const getText = () => editorView?.state.doc.toString() ?? "";
 
+  const getDocLength = () => editorView?.state.doc.length ?? 0;
+
+  const getTextSlice = (from: number, to: number) => {
+    if (!editorView) {
+      return "";
+    }
+    const docLength = editorView.state.doc.length;
+    const safeFrom = Math.max(0, Math.min(docLength, Math.floor(from)));
+    const safeTo = Math.max(safeFrom, Math.min(docLength, Math.floor(to)));
+    if (safeFrom === safeTo) {
+      return "";
+    }
+    return editorView.state.doc.sliceString(safeFrom, safeTo);
+  };
+
   const getRevision = () => revision;
 
   const setText = (text: string, setTextOptions: SetTextOptions = {}) => {
@@ -516,6 +531,8 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
     destroy,
     focus,
     getText,
+    getDocLength,
+    getTextSlice,
     setText,
     append,
     reset,

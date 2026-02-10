@@ -3,6 +3,8 @@ import type { Accessor } from "solid-js";
 type UseGlobalKeyRoutingOptions = {
   fileLoading: Accessor<boolean>;
   requestCancelFileLoad: () => void;
+  fileSaving: Accessor<boolean>;
+  requestCancelFileSave: () => void;
   aboutOpen: Accessor<boolean>;
   confirmDiscardOpen: Accessor<boolean>;
   resolveConfirmDiscard: (shouldDiscard: boolean) => Promise<void>;
@@ -17,6 +19,16 @@ export const useGlobalKeyRouting = (options: UseGlobalKeyRoutingOptions) => {
       if (event.key === "Escape") {
         event.preventDefault();
         options.requestCancelFileLoad();
+        return;
+      }
+      event.preventDefault();
+      return;
+    }
+
+    if (options.fileSaving()) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        options.requestCancelFileSave();
         return;
       }
       event.preventDefault();

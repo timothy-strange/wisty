@@ -74,11 +74,19 @@ export const openTextFilePath = async (defaultPath?: string): Promise<OpenFilePa
 };
 
 export const saveTextFileAs = async (text: string, defaultPath?: string): Promise<SaveAsResult> => {
+  const selected = await saveTextFilePathAs(defaultPath);
+  if (selected.kind === "cancelled") {
+    return selected;
+  }
+  await writeTextFile(selected.filePath, text);
+  return selected;
+};
+
+export const saveTextFilePathAs = async (defaultPath?: string): Promise<SaveAsResult> => {
   const selected = await save({ defaultPath: defaultPath || undefined });
   if (!selected) {
     return { kind: "cancelled" };
   }
-  await writeTextFile(selected, text);
   return {
     kind: "saved",
     filePath: selected
