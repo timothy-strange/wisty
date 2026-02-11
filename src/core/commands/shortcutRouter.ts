@@ -43,9 +43,6 @@ const parseShortcut = (commandId: string, shortcut: string): ShortcutBinding | n
 };
 
 const normalizeEventKey = (event: KeyboardEvent): string => {
-  if (event.key.length === 1) {
-    return event.key.toLowerCase();
-  }
   return event.key.toLowerCase();
 };
 

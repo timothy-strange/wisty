@@ -523,19 +523,33 @@ export const useFileLifecycle = (deps: UseFileLifecycleDeps) => {
       const started = await deps.saveFileStream.startSaveFileStream(filePath);
       streamId = started.streamId;
 
-      for (let from = 0; from < totalChars; from += SAVE_STREAM_CHUNK_CHARS) {
+      let from = 0;
+      while (from < totalChars) {
         if (activeSaveId !== saveId || saveCancelRequested()) {
           throw new FileSaveCancelledError();
         }
 
-        const to = Math.min(totalChars, from + SAVE_STREAM_CHUNK_CHARS);
+        let to = Math.min(totalChars, from + SAVE_STREAM_CHUNK_CHARS);
+        if (to < totalChars) {
+          const charBefore = deps.editor.getTextSlice(to - 1, to);
+          const charCode = charBefore.charCodeAt(0);
+          if (charCode >= 0xd800 && charCode <= 0xdbff) {
+            to -= 1;
+          }
+        }
+        if (to <= from) {
+          to = Math.min(totalChars, from + 1);
+        }
+
         const chunk = deps.editor.getTextSlice(from, to);
         if (!chunk) {
+          from = to;
           continue;
         }
         await deps.saveFileStream.writeSaveFileChunk(streamId, chunk);
         charsWritten += chunk.length;
         setSavingCharsWritten(charsWritten);
+        from = to;
       }
 
       if (activeSaveId !== saveId || saveCancelRequested()) {
