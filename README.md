@@ -127,9 +127,7 @@ Many thanks to the developers of these libraries which are used in this project.
 
 - [plugin-dialog](https://github.com/tauri-apps/plugins-workspace/tree/v2/plugins/dialog)
 - [plugin-fs](https://github.com/tauri-apps/plugins-workspace/tree/v2/plugins/fs)
-- [plugin-shell](https://github.com/tauri-apps/plugins-workspace/tree/v2/plugins/shell)
 - [plugin-store](https://github.com/tauri-apps/plugins-workspace/tree/v2/plugins/store)
-- [plugin-os](https://github.com/tauri-apps/plugins-workspace/tree/v2/plugins/os)
 - [plugin-log](https://github.com/tauri-apps/plugins-workspace/tree/v2/plugins/log)
 - [plugin-clipboard-manager](https://github.com/tauri-apps/plugins-workspace/tree/v2/plugins/clipboard-manager)
 
@@ -142,9 +140,6 @@ Many thanks to the developers of these libraries which are used in this project.
 
 - [Vite](https://github.com/vitejs/vite)
 - [vite-plugin-solid](https://github.com/solidjs/vite-plugin-solid)
-- [Tailwind CSS](https://github.com/tailwindlabs/tailwindcss)
-- [PostCSS](https://github.com/postcss/postcss)
-- [Autoprefixer](https://github.com/postcss/autoprefixer)
 
 ## Credits
 
