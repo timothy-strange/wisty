@@ -9,6 +9,7 @@ import type {
 } from "./contracts";
 import { createSignal } from "solid-js";
 import type { LaunchFileStreamChunkResult } from "../window/launchArgService";
+import { toAppError, type AppErrorCode } from "../errors/appError";
 
 type UseFileLifecycleDeps = {
   editor: Pick<EditorPort, "focus" | "getText" | "getDocLength" | "getTextSlice" | "setText" | "append" | "reset" | "setLargeLineSafeMode" | "getRevision">;
@@ -191,6 +192,20 @@ export const useFileLifecycle = (deps: UseFileLifecycleDeps) => {
   };
 
   const runWithErrorMessage = async (action: () => Promise<void>, context: string) => {
+    const codeByContext = (): AppErrorCode => {
+      const normalized = context.toLowerCase();
+      if (normalized.includes("save")) {
+        return "SAVE_FAILED";
+      }
+      if (normalized.includes("font")) {
+        return "FONT_PICK_FAILED";
+      }
+      if (normalized.includes("launch")) {
+        return "LAUNCH_OPEN_FAILED";
+      }
+      return "OPEN_FAILED";
+    };
+
     try {
       await action();
     } catch (error) {
@@ -202,7 +217,10 @@ export const useFileLifecycle = (deps: UseFileLifecycleDeps) => {
         deps.editor.focus();
         return;
       }
-      await deps.errors.showError(context, error);
+      await deps.errors.showError(
+        context,
+        toAppError(error, codeByContext(), context, { context })
+      );
       deps.editor.focus();
     }
   };
@@ -254,8 +272,16 @@ export const useFileLifecycle = (deps: UseFileLifecycleDeps) => {
       try {
         deps.editor.append(batchText, { emitChange: false, addToHistory: false });
       } catch (error) {
-        throw new Error(
-          `Unable to append ${reason} batch at chunk ${chunkIndex}: ${String(error)}`
+        throw toAppError(
+          error,
+          "OPEN_FAILED",
+          `Unable to append ${reason} batch at chunk ${chunkIndex}`,
+          {
+            filePath,
+            reason,
+            chunkIndex,
+            batchChars: batchText.length
+          }
         );
       }
       const commitDurationMs = performance.now() - startedAt;
@@ -295,8 +321,16 @@ export const useFileLifecycle = (deps: UseFileLifecycleDeps) => {
         }
 
         if (typeof chunk.text !== "string") {
-          throw new Error(
-            `Invalid streamed chunk ${chunkIndex} at ${chunk.bytesReadTotal} bytes: text is ${typeof chunk.text}`
+          throw toAppError(
+            null,
+            "OPEN_FAILED",
+            `Invalid streamed chunk ${chunkIndex} at ${chunk.bytesReadTotal} bytes`,
+            {
+              filePath,
+              chunkIndex,
+              bytesReadTotal: chunk.bytesReadTotal,
+              textType: typeof chunk.text
+            }
           );
         }
 
@@ -331,7 +365,13 @@ export const useFileLifecycle = (deps: UseFileLifecycleDeps) => {
       } else {
         applySafeMode(false);
       }
-      throw error;
+      if (isFileLoadCancelledError(error)) {
+        throw error;
+      }
+      throw toAppError(error, "OPEN_FAILED", "Unable to open file", {
+        filePath,
+        chunkIndex
+      });
     } finally {
       endLoadingState(loadId);
     }
@@ -390,8 +430,11 @@ export const useFileLifecycle = (deps: UseFileLifecycleDeps) => {
         } catch {
           // ignore cancellation errors during teardown
         }
+        throw error;
       }
-      throw error;
+      throw toAppError(error, "LAUNCH_OPEN_FAILED", "Unable to open launch file", {
+        filePath
+      });
     } finally {
       await closeStream();
     }
@@ -502,6 +545,15 @@ export const useFileLifecycle = (deps: UseFileLifecycleDeps) => {
       await deps.saveFileStream.finishSaveFileStream(streamId);
       finished = true;
       setSavingCharsWritten(totalChars);
+    } catch (error) {
+      if (isFileSaveCancelledError(error)) {
+        throw error;
+      }
+      throw toAppError(error, "SAVE_FAILED", "Unable to save file", {
+        filePath,
+        charsWritten,
+        totalChars
+      });
     } finally {
       if (!finished && streamId) {
         try {
@@ -554,6 +606,7 @@ export const useFileLifecycle = (deps: UseFileLifecycleDeps) => {
       });
 
       if (!selection) {
+        deps.editor.focus();
         return;
       }
 
@@ -561,6 +614,7 @@ export const useFileLifecycle = (deps: UseFileLifecycleDeps) => {
       await deps.settings.actions.setFontSize(selection.fontSize);
       await deps.settings.actions.setFontStyle(selection.fontStyle);
       await deps.settings.actions.setFontWeight(selection.fontWeight);
+      deps.editor.focus();
     }, "Unable to choose font");
   };
 

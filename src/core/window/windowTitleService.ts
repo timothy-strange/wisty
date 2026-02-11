@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { toAppError } from "../errors/appError";
 
 export type SetWindowTitleParams = {
   label: string;
@@ -10,10 +11,7 @@ export type SetWindowTitleResult =
   | { ok: false; reason: string };
 
 const toErrorReason = (error: unknown): string => {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return String(error);
+  return toAppError(error, "WINDOW_TITLE_FAILED", "Unable to set window title").message;
 };
 
 export const setNativeWindowTitle = async (

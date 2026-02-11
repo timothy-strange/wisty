@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { toAppError } from "../errors/appError";
 
 export type EditorFontSelection = {
   fontFamily: string;
@@ -49,14 +50,24 @@ const parseSelection = (raw: RawEditorFontSelection): EditorFontSelection => {
     : (typeof raw.font_family === "string" ? raw.font_family : "");
 
   if (!fontFamily.trim()) {
-    throw new Error(`Invalid font selection: missing font family (${JSON.stringify(raw)})`);
+    throw toAppError(
+      null,
+      "FONT_PICK_FAILED",
+      "Invalid font selection: missing font family",
+      { raw }
+    );
   }
 
   const parsedSize = toNumber(raw.fontSize ?? raw.font_size);
   const parsedWeight = toNumber(raw.fontWeight ?? raw.font_weight);
 
   if (parsedSize === null || parsedWeight === null) {
-    throw new Error(`Invalid font selection: missing numeric size/weight (${JSON.stringify(raw)})`);
+    throw toAppError(
+      null,
+      "FONT_PICK_FAILED",
+      "Invalid font selection: missing numeric size/weight",
+      { raw }
+    );
   }
 
   return {
@@ -68,9 +79,15 @@ const parseSelection = (raw: RawEditorFontSelection): EditorFontSelection => {
 };
 
 export const chooseEditorFont = async (current: EditorFontInput): Promise<EditorFontSelection | null> => {
-  const rawResult = await invoke<RawEditorFontSelection | null>("choose_editor_font", { current });
-  if (!rawResult) {
-    return null;
+  try {
+    const rawResult = await invoke<RawEditorFontSelection | null>("choose_editor_font", { current });
+    if (!rawResult) {
+      return null;
+    }
+    return parseSelection(rawResult);
+  } catch (error) {
+    throw toAppError(error, "FONT_PICK_FAILED", "Unable to choose font", {
+      current
+    });
   }
-  return parseSelection(rawResult);
 };

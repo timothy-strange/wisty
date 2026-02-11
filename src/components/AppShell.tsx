@@ -1,10 +1,12 @@
 import { Show } from "solid-js";
 import { AboutDialog } from "./AboutDialog";
 import { ConfirmDiscardModal } from "./ConfirmDiscardModal";
+import { ErrorModal } from "./ErrorModal";
 import { FileLoadingModal } from "./FileLoadingModal";
 import { FileSavingModal } from "./FileSavingModal";
 import { LargeFileOpenModal } from "./LargeFileOpenModal";
 import { MenuBar } from "./MenuBar";
+import type { ErrorModalEntry } from "../core/app/useErrorModalQueue";
 
 type AppShellProps = {
   setEditorHostRef: (node: HTMLDivElement) => void;
@@ -15,6 +17,12 @@ type AppShellProps = {
   onConfirmDiscardCancel: () => void;
   onConfirmDiscard: () => void;
   onAboutClose: () => void;
+  onAboutError: (payload: {
+    title: string;
+    message: string;
+    code?: string;
+    details?: Record<string, unknown>;
+  }) => void;
   largeFileDialog: {
     open: boolean;
     kind: "confirm" | "blocked";
@@ -39,6 +47,11 @@ type AppShellProps = {
     charsWritten: number;
     totalChars?: number;
     onCancel: () => void;
+  };
+  errorModal: {
+    open: boolean;
+    entry: ErrorModalEntry | null;
+    onDismiss: () => void;
   };
 };
 
@@ -65,6 +78,7 @@ export const AppShell = (props: AppShellProps) => {
         open={props.aboutOpen}
         version={props.appVersion}
         onClose={props.onAboutClose}
+        onError={props.onAboutError}
       />
 
       <LargeFileOpenModal
@@ -96,6 +110,12 @@ export const AppShell = (props: AppShellProps) => {
         charsWritten={props.saving.charsWritten}
         totalChars={props.saving.totalChars}
         onCancel={props.saving.onCancel}
+      />
+
+      <ErrorModal
+        open={props.errorModal.open}
+        entry={props.errorModal.entry}
+        onDismiss={props.errorModal.onDismiss}
       />
     </main>
   );

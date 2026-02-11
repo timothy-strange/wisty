@@ -58,11 +58,6 @@ export const createSettingsStore = () => {
     await saveSetting("textWrapEnabled", enabled);
   };
 
-  const setHighlightCurrentLineEnabled = async (enabled: boolean) => {
-    setState({ highlightCurrentLineEnabled: enabled });
-    await saveSetting("highlightCurrentLineEnabled", enabled);
-  };
-
   const setLastDirectory = async (lastDirectory: string) => {
     setState({ lastDirectory });
     await saveSetting("lastDirectory", lastDirectory);
@@ -77,7 +72,6 @@ export const createSettingsStore = () => {
     const loadedFontStyle = await backingStore.get("fontStyle");
     const loadedFontWeight = await backingStore.get("fontWeight");
     const loadedTextWrapEnabled = await backingStore.get("textWrapEnabled");
-    const loadedHighlightCurrentLine = await backingStore.get("highlightCurrentLineEnabled");
     const loadedLastDirectory = await backingStore.get("lastDirectory");
 
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -91,9 +85,6 @@ export const createSettingsStore = () => {
       fontStyle: isFontStyle(loadedFontStyle) ? loadedFontStyle : DEFAULT_SETTINGS.fontStyle,
       fontWeight: typeof loadedFontWeight === "number" ? clamp(loadedFontWeight, 100, 900) : DEFAULT_SETTINGS.fontWeight,
       textWrapEnabled: typeof loadedTextWrapEnabled === "boolean" ? loadedTextWrapEnabled : DEFAULT_SETTINGS.textWrapEnabled,
-      highlightCurrentLineEnabled: typeof loadedHighlightCurrentLine === "boolean"
-        ? loadedHighlightCurrentLine
-        : DEFAULT_SETTINGS.highlightCurrentLineEnabled,
       lastDirectory: typeof loadedLastDirectory === "string" ? loadedLastDirectory : DEFAULT_SETTINGS.lastDirectory
     });
 
@@ -111,7 +102,6 @@ export const createSettingsStore = () => {
       setFontStyle,
       setFontWeight,
       setTextWrapEnabled,
-      setHighlightCurrentLineEnabled,
       setLastDirectory
     }
   };

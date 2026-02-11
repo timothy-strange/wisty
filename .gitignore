@@ -15,6 +15,8 @@ dist-user/
 # Legacy/reference artifacts
 legacy-reference/
 IMPROVEMENT_PLAN.md
+concerns.txt
+demo-text
 
 # Rust/Tauri build artifacts
 src-tauri/target/

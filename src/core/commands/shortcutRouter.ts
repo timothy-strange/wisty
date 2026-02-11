@@ -5,6 +5,7 @@ type ShortcutBinding = {
   key: string;
   requiresShift: boolean;
   requiresMod: boolean;
+  requiresAlt: boolean;
 };
 
 type ShortcutRouterDeps = {
@@ -30,12 +31,14 @@ const parseShortcut = (commandId: string, shortcut: string): ShortcutBinding | n
   const modifiers = new Set(parts.slice(0, -1).map((part) => part.toLowerCase()));
   const requiresShift = modifiers.has("shift");
   const requiresMod = modifiers.has("cmd") || modifiers.has("ctrl") || modifiers.has("mod");
+  const requiresAlt = modifiers.has("alt");
 
   return {
     commandId,
     key,
     requiresShift,
-    requiresMod
+    requiresMod,
+    requiresAlt
   };
 };
 
@@ -47,7 +50,7 @@ const normalizeEventKey = (event: KeyboardEvent): string => {
 };
 
 const matchesShortcut = (event: KeyboardEvent, binding: ShortcutBinding): boolean => {
-  if (event.altKey) {
+  if (binding.requiresAlt !== event.altKey) {
     return false;
   }
 
@@ -77,7 +80,7 @@ export const createShortcutRouter = (deps: ShortcutRouterDeps) => {
       continue;
     }
 
-    const dedupeKey = `${parsed.requiresMod ? "mod" : "plain"}:${parsed.requiresShift ? "shift" : "plain"}:${parsed.key}`;
+    const dedupeKey = `${parsed.requiresMod ? "mod" : "plain"}:${parsed.requiresShift ? "shift" : "plain"}:${parsed.requiresAlt ? "alt" : "plain"}:${parsed.key}`;
     if (seenShortcuts.has(dedupeKey)) {
       continue;
     }

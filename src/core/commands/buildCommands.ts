@@ -30,12 +30,10 @@ type BuildCommandsDeps = {
     state: {
       themeMode: "light" | "dark";
       textWrapEnabled: boolean;
-      highlightCurrentLineEnabled: boolean;
     };
     actions: {
       setThemeMode: (mode: "light" | "dark") => Promise<void>;
       setTextWrapEnabled: (enabled: boolean) => Promise<void>;
-      setHighlightCurrentLineEnabled: (enabled: boolean) => Promise<void>;
     };
   };
   showAbout: () => Promise<void>;
@@ -93,6 +91,17 @@ export const buildCommands = (deps: BuildCommandsDeps): { definitions: CommandDe
         deps.editor.redoEdit();
       }
     },
+    ...(!deps.platform.isMac
+      ? [{
+        id: "edit.redo.alt",
+        label: "Redo",
+        shortcut: commandShortcut(false, "Z", true),
+        refocusEditorOnMenuSelect: true,
+        run: () => {
+          deps.editor.redoEdit();
+        }
+      } satisfies CommandDefinition]
+      : []),
     {
       id: "edit.cut",
       label: "Cut",
@@ -153,22 +162,16 @@ export const buildCommands = (deps: BuildCommandsDeps): { definitions: CommandDe
     {
       id: "view.wrap",
       label: "Text Wrap",
+      shortcut: "Alt+Z",
       refocusEditorOnMenuSelect: true,
       run: () => deps.settings.actions.setTextWrapEnabled(!deps.settings.state.textWrapEnabled),
       enabled: () => !deps.fileLifecycle.safeModeActive(),
       checked: () => !deps.fileLifecycle.safeModeActive() && deps.settings.state.textWrapEnabled
     },
     {
-      id: "view.highlight.current",
-      label: "Highlight Current Line",
-      refocusEditorOnMenuSelect: true,
-      run: () => deps.settings.actions.setHighlightCurrentLineEnabled(!deps.settings.state.highlightCurrentLineEnabled),
-      enabled: () => !deps.fileLifecycle.safeModeActive(),
-      checked: () => !deps.fileLifecycle.safeModeActive() && deps.settings.state.highlightCurrentLineEnabled
-    },
-    {
       id: "view.font.browser",
       label: "Font...",
+      refocusEditorOnMenuSelect: true,
       run: deps.fileLifecycle.chooseEditorFont
     },
     {
@@ -214,7 +217,6 @@ export const buildCommands = (deps: BuildCommandsDeps): { definitions: CommandDe
         { type: "command", commandId: "view.theme.dark" },
         { type: "separator" },
         { type: "command", commandId: "view.wrap" },
-        { type: "command", commandId: "view.highlight.current" },
         { type: "separator" },
         { type: "command", commandId: "view.font.browser" }
       ]

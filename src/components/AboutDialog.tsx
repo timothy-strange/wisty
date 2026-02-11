@@ -8,21 +8,36 @@ import {
   Description as DialogDescription,
   CloseButton as DialogCloseButton
 } from "@kobalte/core/dialog";
-import { message } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { libraryCredits } from "../core/about/libraryCredits";
+import { toAppError } from "../core/errors/appError";
 
 type AboutDialogProps = {
   open: boolean;
   version: string;
   onClose: () => void;
+  onError: (payload: {
+    title: string;
+    message: string;
+    code?: string;
+    details?: Record<string, unknown>;
+  }) => void;
 };
 
-const openInBrowser = async (url: string) => {
+const openInBrowser = async (
+  url: string,
+  onError: AboutDialogProps["onError"]
+) => {
   try {
     await openUrl(url);
   } catch (error) {
-    await message(`Unable to open link: ${String(error)}`);
+    const appError = toAppError(error, "UNKNOWN", "Unable to open link", { url });
+    onError({
+      title: "Unable to open link",
+      message: appError.message,
+      code: appError.code,
+      details: appError.details
+    });
   }
 };
 
@@ -51,7 +66,7 @@ export const AboutDialog = (props: AboutDialogProps) => {
                   {(library) => (
                     <div class="about-list-row">
                       <span class="about-list-name">{library.name}</span>
-                      <button class="about-open-link" onClick={() => void openInBrowser(library.url)}>Open</button>
+                      <button class="about-open-link" onClick={() => void openInBrowser(library.url, props.onError)}>Open</button>
                     </div>
                   )}
                 </For>
@@ -61,7 +76,7 @@ export const AboutDialog = (props: AboutDialogProps) => {
           </div>
 
           <div class="about-footer">
-            <button class="button" onClick={() => void openInBrowser("https://github.com/timothy-strange/wisty")}>wisty repository</button>
+            <button class="button" onClick={() => void openInBrowser("https://github.com/timothy-strange/wisty", props.onError)}>wisty repository</button>
           </div>
         </DialogContent>
       </DialogPortal>

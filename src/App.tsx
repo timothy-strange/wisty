@@ -1,7 +1,6 @@
 import { createEffect, createSignal } from "solid-js";
 import { getVersion } from "@tauri-apps/api/app";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { message } from "@tauri-apps/plugin-dialog";
 import "./App.css";
 import { AppShell } from "./components/AppShell";
 import { createCommandRegistry } from "./core/commands/commandRegistry";
@@ -16,6 +15,7 @@ import { useGlobalKeyRouting } from "./core/app/useGlobalKeyRouting";
 import { useMenuCommandPipeline } from "./core/app/useMenuCommandPipeline";
 import { useMenuState } from "./core/app/useMenuState";
 import { useWindowTitleSync } from "./core/app/useWindowTitleSync";
+import { useErrorModalQueue } from "./core/app/useErrorModalQueue";
 import { createDocumentStore } from "./core/document/documentStore";
 import { createEditorAdapter } from "./core/editor/editorAdapter";
 import {
@@ -30,6 +30,7 @@ import {
 } from "./core/files/fileService";
 import { createSettingsStore } from "./core/settings/settingsStore";
 import { chooseEditorFont } from "./core/fonts/fontDialog";
+import { toAppError } from "./core/errors/appError";
 import {
   cancelSaveFileStream,
   finishSaveFileStream,
@@ -70,6 +71,7 @@ function App() {
   const [aboutOpen, setAboutOpen] = createSignal(false);
   const [appVersion, setAppVersion] = createSignal("2.0.0");
   const [largeFileDialog, setLargeFileDialog] = createSignal<LargeFileDialogState | null>(null);
+  const errorModalQueue = useErrorModalQueue();
 
   let editorHostRef: HTMLDivElement | undefined;
 
@@ -82,7 +84,13 @@ function App() {
 
   const errors: ErrorReporter = {
     showError: async (context, error) => {
-      await message(`${context}: ${String(error)}`);
+      const appError = toAppError(error, "UNKNOWN", context, { context });
+      errorModalQueue.enqueue({
+        title: context,
+        message: appError.message,
+        code: appError.code,
+        details: appError.details
+      });
     }
   };
 
@@ -163,6 +171,17 @@ function App() {
     editorAdapter.focus();
   };
 
+  const dismissErrorModalAndRefocus = () => {
+    const hadSingleEntry = errorModalQueue.entries().length <= 1;
+    errorModalQueue.dismissCurrent();
+    if (!hadSingleEntry) {
+      return;
+    }
+    requestAnimationFrame(() => {
+      editorAdapter.focus();
+    });
+  };
+
   const { definitions, sections } = buildCommands({
     platform: { isMac: PLATFORM_IS_MAC },
     closeFlow,
@@ -174,7 +193,9 @@ function App() {
 
   const commandRegistry = createCommandRegistry(definitions);
   const isInteractionBlocked = () =>
-    fileLifecycle.loadingState.isLoading() || fileLifecycle.savingState.isSaving();
+    fileLifecycle.loadingState.isLoading()
+    || fileLifecycle.savingState.isSaving()
+    || errorModalQueue.open();
 
   const { handleMenuCommandSelected, handleMenuPanelOpenChange } = useMenuCommandPipeline({
     menuPanelOpen: menuState.menuPanelOpen,
@@ -200,6 +221,8 @@ function App() {
     requestCancelFileLoad: fileLifecycle.requestCancelLoading,
     fileSaving: fileLifecycle.savingState.isSaving,
     requestCancelFileSave: fileLifecycle.requestCancelSaving,
+    errorModalOpen: errorModalQueue.open,
+    dismissErrorModal: dismissErrorModalAndRefocus,
     aboutOpen,
     confirmDiscardOpen: closeFlow.confirmDiscardOpen,
     resolveConfirmDiscard: closeFlow.resolveConfirmDiscard,
@@ -228,7 +251,13 @@ function App() {
     document: documentStore,
     loadSettings: () => settingsStore.load(),
     onSettingsLoadError: async (error) => {
-      await message(`Unable to load settings: ${String(error)}`);
+      const appError = toAppError(error, "SETTINGS_LOAD_FAILED", "Unable to load settings");
+      errorModalQueue.enqueue({
+        title: "Unable to load settings",
+        message: appError.message,
+        code: appError.code,
+        details: appError.details
+      });
     },
     takeLaunchFileArg,
     openLaunchFileArg: async (launchFile: LaunchFileArg) => {
@@ -239,7 +268,13 @@ function App() {
       await fileLifecycle.openMissingFileAtPath(launchFile.path);
     },
     onLaunchFileOpenError: async (error) => {
-      await message(`Unable to open launch file: ${String(error)}`);
+      const appError = toAppError(error, "LAUNCH_OPEN_FAILED", "Unable to open launch file");
+      errorModalQueue.enqueue({
+        title: "Unable to open launch file",
+        message: appError.message,
+        code: appError.code,
+        details: appError.details
+      });
     },
     loadVersion: () => getVersion(),
     setAppVersion,
@@ -255,7 +290,6 @@ function App() {
     settingsStore.state.fontStyle;
     settingsStore.state.fontWeight;
     settingsStore.state.textWrapEnabled;
-    settingsStore.state.highlightCurrentLineEnabled;
     editorAdapter.applySettings();
   });
 
@@ -279,6 +313,9 @@ function App() {
           onConfirmDiscardCancel={() => void closeFlow.resolveConfirmDiscard(false)}
           onConfirmDiscard={() => void closeFlow.resolveConfirmDiscard(true)}
           onAboutClose={closeAboutDialog}
+          onAboutError={(payload) => {
+            errorModalQueue.enqueue(payload);
+          }}
           largeFileDialog={{
             open: largeFileDialog() !== null,
             kind: largeFileDialog()?.kind ?? "confirm",
@@ -324,6 +361,11 @@ function App() {
             charsWritten: fileLifecycle.savingState.savingCharsWritten(),
             totalChars: fileLifecycle.savingState.savingTotalChars(),
             onCancel: fileLifecycle.requestCancelSaving
+          }}
+          errorModal={{
+            open: errorModalQueue.open(),
+            entry: errorModalQueue.current(),
+            onDismiss: dismissErrorModalAndRefocus
           }}
         />
       </MenuProvider>

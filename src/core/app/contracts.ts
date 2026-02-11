@@ -145,7 +145,6 @@ export type SettingsPort = {
     fontStyle: FontStyle;
     fontWeight: number;
     textWrapEnabled: boolean;
-    highlightCurrentLineEnabled: boolean;
     lastDirectory: string;
   };
   ready: Accessor<boolean>;
@@ -157,7 +156,6 @@ export type SettingsPort = {
     setFontStyle: (fontStyle: FontStyle) => Promise<void>;
     setFontWeight: (fontWeight: number) => Promise<void>;
     setTextWrapEnabled: (enabled: boolean) => Promise<void>;
-    setHighlightCurrentLineEnabled: (enabled: boolean) => Promise<void>;
     setLastDirectory: (path: string) => Promise<void>;
   };
 };

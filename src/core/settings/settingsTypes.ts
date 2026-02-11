@@ -15,7 +15,6 @@ export type AppSettings = {
   fontStyle: FontStyle;
   fontWeight: number;
   textWrapEnabled: boolean;
-  highlightCurrentLineEnabled: boolean;
   lastDirectory: string;
 };
 
@@ -25,7 +24,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   fontSize: 14,
   fontStyle: "normal",
   fontWeight: 400,
-  textWrapEnabled: false,
-  highlightCurrentLineEnabled: true,
+  textWrapEnabled: true,
   lastDirectory: ""
 };

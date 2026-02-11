@@ -1,7 +1,7 @@
 import { Compartment, EditorState, Transaction } from "@codemirror/state";
 import { defaultKeymap, history, isolateHistory, redo, undo } from "@codemirror/commands";
 import { search, searchKeymap } from "@codemirror/search";
-import { drawSelection, dropCursor, EditorView, highlightActiveLine, keymap } from "@codemirror/view";
+import { drawSelection, dropCursor, EditorView, keymap } from "@codemirror/view";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { AppSettings } from "../settings/settingsTypes";
 import { createSearchPanelAdapter } from "./searchPanelAdapter";
@@ -41,7 +41,6 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
 
   const wrapCompartment = new Compartment();
   const styleCompartment = new Compartment();
-  const activeLineCompartment = new Compartment();
 
   const createStyleExtension = () => {
     const settings = options.getSettings();
@@ -215,7 +214,6 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
         ]),
         wrapCompartment.of(!largeLineSafeModeEnabled && settings.textWrapEnabled ? EditorView.lineWrapping : []),
         styleCompartment.of(createStyleExtension()),
-        activeLineCompartment.of(!largeLineSafeModeEnabled && settings.highlightCurrentLineEnabled ? highlightActiveLine() : []),
         EditorView.updateListener.of((update) => {
           if (!update.docChanged) {
             return;
@@ -420,8 +418,7 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
     editorView.dispatch({
       effects: [
         wrapCompartment.reconfigure(!largeLineSafeModeEnabled && settings.textWrapEnabled ? EditorView.lineWrapping : []),
-        styleCompartment.reconfigure(createStyleExtension()),
-        activeLineCompartment.reconfigure(!largeLineSafeModeEnabled && settings.highlightCurrentLineEnabled ? highlightActiveLine() : [])
+        styleCompartment.reconfigure(createStyleExtension())
       ]
     });
   };

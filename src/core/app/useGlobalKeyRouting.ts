@@ -5,6 +5,8 @@ type UseGlobalKeyRoutingOptions = {
   requestCancelFileLoad: () => void;
   fileSaving: Accessor<boolean>;
   requestCancelFileSave: () => void;
+  errorModalOpen: Accessor<boolean>;
+  dismissErrorModal: () => void;
   aboutOpen: Accessor<boolean>;
   confirmDiscardOpen: Accessor<boolean>;
   resolveConfirmDiscard: (shouldDiscard: boolean) => Promise<void>;
@@ -15,6 +17,14 @@ type UseGlobalKeyRoutingOptions = {
 
 export const useGlobalKeyRouting = (options: UseGlobalKeyRoutingOptions) => {
   const handleGlobalKeydown = (event: KeyboardEvent) => {
+    if (options.errorModalOpen()) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        options.dismissErrorModal();
+      }
+      return;
+    }
+
     if (options.fileLoading()) {
       if (event.key === "Escape") {
         event.preventDefault();
