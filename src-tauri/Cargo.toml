@@ -1,7 +1,8 @@
 [package]
 name = "wisty"
 version = "2.0.0"
-description = "Wisty v2 rewrite"
+description = "Plain text editor"
+license = "GPL-3.0-or-later"
 authors = ["Wisty contributors"]
 edition = "2021"
 

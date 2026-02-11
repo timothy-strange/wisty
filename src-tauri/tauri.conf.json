@@ -24,6 +24,61 @@
   "bundle": {
     "active": false,
     "targets": "all",
+    "category": "Utility",
+    "shortDescription": "Plain text editor",
+    "fileAssociations": [
+      {
+        "ext": [
+          "txt",
+          "text"
+        ],
+        "mimeType": "text/plain",
+        "description": "Plain text document"
+      },
+      {
+        "ext": [
+          "md"
+        ],
+        "mimeType": "text/markdown",
+        "description": "Markdown document"
+      },
+      {
+        "ext": [
+          "log"
+        ],
+        "mimeType": "text/x-log",
+        "description": "Log file"
+      },
+      {
+        "ext": [
+          "json"
+        ],
+        "mimeType": "application/json",
+        "description": "JSON document"
+      },
+      {
+        "ext": [
+          "xml"
+        ],
+        "mimeType": "application/xml",
+        "description": "XML document"
+      },
+      {
+        "ext": [
+          "csv"
+        ],
+        "mimeType": "text/csv",
+        "description": "CSV document"
+      }
+    ],
+    "linux": {
+      "deb": {
+        "desktopTemplate": "wisty.desktop.hbs"
+      },
+      "rpm": {
+        "desktopTemplate": "wisty.desktop.hbs"
+      }
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

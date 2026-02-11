@@ -1,16 +1,19 @@
 {
   "name": "wisty",
   "version": "2.0.0",
-  "description": "Wisty v2 rewrite (Tauri + Solid + TypeScript)",
+  "description": "Plain text editor",
   "type": "module",
   "scripts": {
     "start": "vite",
     "dev": "vite",
     "build": "vite build",
     "serve": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "tauri:bundle": "tauri build --bundles deb,rpm,appimage",
+    "package:user-tarball": "bash scripts/package-user-tarball.sh",
+    "release:linux": "npm run tauri:bundle && npm run package:user-tarball"
   },
-  "license": "MIT",
+  "license": "GPL-3.0-or-later",
   "dependencies": {
     "@codemirror/commands": "^6.10.2",
     "@codemirror/search": "^6.6.0",
