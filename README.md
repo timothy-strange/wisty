@@ -7,13 +7,11 @@ Wisty was originally a fork of [Parchment](https://github.com/tywil04/parchment)
 ![wisty light](images/wisty-light.png)
 ![wisty dark](images/wisty-dark.png)
 
-The main motivation for creating wisty was aesthetics. I wasn't happy with the visual style of any existing Linux graphical text editors. Gnome Text Editor looks reasonable but I didn't like the unconventional menu layout and the cluttered look of the title bar. Also, I wanted a genuinely lightweight editor. I think there is room for at least **one** text editor which doesn't have extensive code parsing and highlighting features. Even if these features don't use a lot of resources, they still clutter the app and spoil the minimalist vibe which I like. I just want somewhere basic where I can quickly view text or temporarily paste things, which also looks really nice.
+The main motivation for creating wisty was aesthetics. I wasn't happy with the visual style of any existing Linux graphical text editors. Gnome Text Editor looks reasonable but I don't like the unconventional menu layout and the cluttered look of the title bar. Also, I wanted a genuinely lightweight editor. I think there is room for at least one text editor which doesn't have extensive code parsing and highlighting features. Even if these features don't use a lot of resources, they still clutter the app and spoil the minimalist vibe which I like. I just want somewhere basic where I can quickly view text or temporarily paste things, which also looks really nice.
 
 ## Installation
 
-The recommended Linux install is the `wisty-user-install-*.tar.gz` archive from the [Releases](https://github.com/timothy-strange/wisty/releases) page.
-
-This installs wisty **only for the current user** under your home directory.
+The simplest approach (IMHO) is a user-only install (sudo not required, installs in your home dir). 
 
 ### Install from user tarball
 
@@ -59,7 +57,7 @@ wisty requires **WebKitGTK 4.1** at runtime (`libwebkit2gtk-4.1`).
 
 It also requires GTK runtime libraries (GTK 3) and related system components used by Tauri/WebKitGTK.
 
-On many current Linux desktop systems these are already present, especially GNOME-based systems, but not always all required packages.
+You may already have these, if not, install them like this:
 
 ### Ubuntu / Debian
 
@@ -116,6 +114,8 @@ npm run tauri -- build
 ```
 
 ## Open source libraries used
+
+Many thanks to the developers of these libraries which are used in this project.
 
 ### App framework and runtime
 
