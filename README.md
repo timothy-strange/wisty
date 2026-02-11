@@ -15,7 +15,7 @@ The simplest approach (IMHO) is a user-only install (sudo not required, installs
 
 ### Install from user tarball
 
-1. Download the latest `wisty-user-install-<version>-linux-<arch>.tar.gz` from Releases.
+1. Download the latest `wisty-user-install-<version>-linux-<arch>.tar.gz` from [Releases](https://github.com/timothy-strange/wisty/releases/).
 2. Extract it:
 
 ```bash
