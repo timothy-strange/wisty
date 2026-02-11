@@ -69,7 +69,7 @@ function App() {
   const settingsStore = createSettingsStore();
   const menuState = useMenuState();
   const [aboutOpen, setAboutOpen] = createSignal(false);
-  const [appVersion, setAppVersion] = createSignal("2.0.0");
+  const [appVersion, setAppVersion] = createSignal("2.0.1");
   const [largeFileDialog, setLargeFileDialog] = createSignal<LargeFileDialogState | null>(null);
   const errorModalQueue = useErrorModalQueue();
 
