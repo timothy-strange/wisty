@@ -404,18 +404,18 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
     applySettings();
   };
 
-  const toggleFindPanel = () => {
+  const openOrFocusFindPanel = () => {
     if (!editorView) {
       return false;
     }
-    return searchPanelAdapter.toggleFindPanel(editorView);
+    return searchPanelAdapter.openOrFocusFindPanel(editorView);
   };
 
-  const toggleReplacePanel = () => {
+  const openOrFocusReplacePanel = () => {
     if (!editorView) {
       return false;
     }
-    return searchPanelAdapter.toggleReplacePanel(editorView);
+    return searchPanelAdapter.openOrFocusReplacePanel(editorView);
   };
 
   const getSelectedText = () => {
@@ -508,8 +508,8 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
     reset,
     setLargeLineSafeMode,
     applySettings,
-    toggleFindPanel,
-    toggleReplacePanel,
+    openOrFocusFindPanel,
+    openOrFocusReplacePanel,
     cutSelection,
     copySelection,
     pasteSelection,

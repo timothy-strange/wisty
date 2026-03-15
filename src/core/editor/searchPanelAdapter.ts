@@ -1,20 +1,48 @@
-import { closeSearchPanel, openSearchPanel, searchPanelOpen } from "@codemirror/search";
+import { openSearchPanel, searchPanelOpen } from "@codemirror/search";
 import type { EditorView } from "@codemirror/view";
 
-const togglePanel = (view: EditorView): boolean => {
+const focusInput = (view: EditorView, selector: string) => {
+  const focusNow = () => {
+    const element = view.dom.querySelector<HTMLInputElement>(selector);
+    if (!element) {
+      return false;
+    }
+    element.focus();
+    element.select();
+    return true;
+  };
+
+  if (focusNow()) {
+    return;
+  }
+
+  requestAnimationFrame(() => {
+    void focusNow();
+  });
+};
+
+const ensurePanelOpen = (view: EditorView): boolean => {
   if (searchPanelOpen(view.state)) {
-    return closeSearchPanel(view);
+    return true;
   }
   return openSearchPanel(view);
 };
 
 export const createSearchPanelAdapter = () => {
-  const toggleFindPanel = (view: EditorView): boolean => togglePanel(view);
+  const openOrFocusFindPanel = (view: EditorView): boolean => {
+    const opened = ensurePanelOpen(view);
+    focusInput(view, ".cm-search input[name='search']");
+    return opened;
+  };
 
-  const toggleReplacePanel = (view: EditorView): boolean => togglePanel(view);
+  const openOrFocusReplacePanel = (view: EditorView): boolean => {
+    const opened = ensurePanelOpen(view);
+    focusInput(view, ".cm-search input[name='replace']");
+    return opened;
+  };
 
   return {
-    toggleFindPanel,
-    toggleReplacePanel
+    openOrFocusFindPanel,
+    openOrFocusReplacePanel
   };
 };

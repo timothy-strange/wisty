@@ -23,8 +23,8 @@ type BuildCommandsDeps = {
     cutSelection: () => Promise<boolean>;
     copySelection: () => Promise<boolean>;
     pasteSelection: () => Promise<boolean>;
-    toggleFindPanel: () => boolean;
-    toggleReplacePanel: () => boolean;
+    openOrFocusFindPanel: () => boolean;
+    openOrFocusReplacePanel: () => boolean;
   };
   settings: {
     state: {
@@ -136,15 +136,15 @@ export const buildCommands = (deps: BuildCommandsDeps): { definitions: CommandDe
       label: "Find...",
       shortcut: commandShortcut(deps.platform.isMac, "F"),
       run: () => {
-        deps.editor.toggleFindPanel();
+        deps.editor.openOrFocusFindPanel();
       }
     },
     {
       id: "edit.find.altReplaceKey",
-      label: "Find...",
+      label: "Replace...",
       shortcut: commandShortcut(deps.platform.isMac, "H"),
       run: () => {
-        deps.editor.toggleFindPanel();
+        deps.editor.openOrFocusReplacePanel();
       }
     },
     {
