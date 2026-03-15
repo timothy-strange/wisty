@@ -71,6 +71,8 @@ function App() {
   const [aboutOpen, setAboutOpen] = createSignal(false);
   const [appVersion, setAppVersion] = createSignal("2.0.1");
   const [largeFileDialog, setLargeFileDialog] = createSignal<LargeFileDialogState | null>(null);
+  const [cursorLine, setCursorLine] = createSignal(1);
+  const [totalLines, setTotalLines] = createSignal(1);
   const errorModalQueue = useErrorModalQueue();
 
   let editorHostRef: HTMLDivElement | undefined;
@@ -79,6 +81,10 @@ function App() {
     getSettings: () => settingsStore.state,
     onDocChanged: ({ revision }) => {
       documentStore.setRevision(revision);
+    },
+    onCursorPositionChanged: ({ currentLine, totalLines }) => {
+      setCursorLine(currentLine);
+      setTotalLines(totalLines);
     }
   });
 
@@ -361,6 +367,11 @@ function App() {
             charsWritten: fileLifecycle.savingState.savingCharsWritten(),
             totalChars: fileLifecycle.savingState.savingTotalChars(),
             onCancel: fileLifecycle.requestCancelSaving
+          }}
+          statusBar={{
+            enabled: settingsStore.state.statusBarEnabled,
+            currentLine: cursorLine(),
+            totalLines: totalLines()
           }}
           errorModal={{
             open: errorModalQueue.open(),

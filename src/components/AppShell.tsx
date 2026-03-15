@@ -48,6 +48,11 @@ type AppShellProps = {
     totalChars?: number;
     onCancel: () => void;
   };
+  statusBar: {
+    enabled: boolean;
+    currentLine: number;
+    totalLines: number;
+  };
   errorModal: {
     open: boolean;
     entry: ErrorModalEntry | null;
@@ -66,6 +71,10 @@ export const AppShell = (props: AppShellProps) => {
 
       <Show when={props.safeModeActive}>
         <div class="large-line-safe-banner">Opened in large-line safe mode for stability.</div>
+      </Show>
+
+      <Show when={props.statusBar.enabled}>
+        <div class="status-bar">Line {props.statusBar.currentLine} of {props.statusBar.totalLines}</div>
       </Show>
 
       <ConfirmDiscardModal

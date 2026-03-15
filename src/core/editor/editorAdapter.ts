@@ -10,8 +10,14 @@ type DocChangedPayload = {
   revision: number;
 };
 
+type CursorPositionPayload = {
+  currentLine: number;
+  totalLines: number;
+};
+
 type EditorAdapterOptions = {
   onDocChanged: (payload: DocChangedPayload) => void;
+  onCursorPositionChanged: (payload: CursorPositionPayload) => void;
   getSettings: () => AppSettings;
 };
 
@@ -34,9 +40,9 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
   let editorView: EditorView | undefined;
   let revision = 0;
   let suppressDocEvents = 0;
-  let stagedLoadState: EditorState | undefined;
-  let stagedLoadRevision = 0;
   let largeLineSafeModeEnabled = false;
+  let lastReportedCurrentLine: number | undefined;
+  let lastReportedTotalLines: number | undefined;
   const searchPanelAdapter = createSearchPanelAdapter();
 
   const wrapCompartment = new Compartment();
@@ -215,6 +221,10 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
         wrapCompartment.of(!largeLineSafeModeEnabled && settings.textWrapEnabled ? EditorView.lineWrapping : []),
         styleCompartment.of(createStyleExtension()),
         EditorView.updateListener.of((update) => {
+          if (update.docChanged || update.selectionSet) {
+            emitCursorPositionIfChanged(update.state);
+          }
+
           if (!update.docChanged) {
             return;
           }
@@ -226,6 +236,19 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
         })
       ]
     });
+  };
+
+  const emitCursorPositionIfChanged = (state: EditorState) => {
+    const currentLine = state.doc.lineAt(state.selection.main.head).number;
+    const totalLines = state.doc.lines;
+
+    if (lastReportedCurrentLine === currentLine && lastReportedTotalLines === totalLines) {
+      return;
+    }
+
+    lastReportedCurrentLine = currentLine;
+    lastReportedTotalLines = totalLines;
+    options.onCursorPositionChanged({ currentLine, totalLines });
   };
 
   const dispatchTextChange = (
@@ -267,6 +290,8 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
       parent: editorHost,
       state: createEditorState("")
     });
+
+    emitCursorPositionIfChanged(editorView.state);
   };
 
   const destroy = () => {
@@ -338,59 +363,6 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
     });
   };
 
-  const beginProgrammaticLoad = () => {
-    stagedLoadState = createEditorState("");
-    stagedLoadRevision = 0;
-  };
-
-  const appendToProgrammaticLoad = (text: string) => {
-    if (!stagedLoadState) {
-      throw new Error("Programmatic load has not started");
-    }
-    if (typeof text !== "string") {
-      throw new Error(`Programmatic append expects string text, received ${typeof text}`);
-    }
-    if (text.length === 0) {
-      return;
-    }
-
-    const from = stagedLoadState.doc.length;
-    stagedLoadState = stagedLoadState.update({
-      changes: {
-        from,
-        to: from,
-        insert: text
-      },
-      annotations: [Transaction.addToHistory.of(false)]
-    }).state;
-    stagedLoadRevision += 1;
-  };
-
-  const commitProgrammaticLoad = (optionsArg: { emitChange?: boolean } = {}) => {
-    if (!editorView || !stagedLoadState) {
-      stagedLoadState = undefined;
-      stagedLoadRevision = 0;
-      return;
-    }
-
-    const emitChange = optionsArg.emitChange ?? true;
-    editorView.setState(stagedLoadState);
-    editorView.scrollDOM.scrollTop = 0;
-    editorView.scrollDOM.scrollLeft = 0;
-    revision = stagedLoadRevision;
-    stagedLoadState = undefined;
-    stagedLoadRevision = 0;
-
-    if (emitChange) {
-      options.onDocChanged({ revision });
-    }
-  };
-
-  const cancelProgrammaticLoad = () => {
-    stagedLoadState = undefined;
-    stagedLoadRevision = 0;
-  };
-
   const reset = (resetOptions: ResetEditorOptions = {}) => {
     if (!editorView) {
       return;
@@ -404,6 +376,7 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
     revision = 0;
     editorView.scrollDOM.scrollTop = 0;
     editorView.scrollDOM.scrollLeft = 0;
+    emitCursorPositionIfChanged(editorView.state);
 
     if (emitChange) {
       options.onDocChanged({ revision });
@@ -533,10 +506,6 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
     setText,
     append,
     reset,
-    beginProgrammaticLoad,
-    appendToProgrammaticLoad,
-    commitProgrammaticLoad,
-    cancelProgrammaticLoad,
     setLargeLineSafeMode,
     applySettings,
     toggleFindPanel,

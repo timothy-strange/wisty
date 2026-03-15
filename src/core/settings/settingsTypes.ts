@@ -15,6 +15,7 @@ export type AppSettings = {
   fontStyle: FontStyle;
   fontWeight: number;
   textWrapEnabled: boolean;
+  statusBarEnabled: boolean;
   lastDirectory: string;
 };
 
@@ -25,5 +26,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   fontStyle: "normal",
   fontWeight: 400,
   textWrapEnabled: true,
+  statusBarEnabled: true,
   lastDirectory: ""
 };

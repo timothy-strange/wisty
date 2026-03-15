@@ -96,10 +96,6 @@ export type EditorPort = {
   setText: (text: string, options?: { emitChange?: boolean }) => void;
   append: (text: string, options?: AppendTextOptions) => void;
   reset: (options?: ResetEditorOptions) => void;
-  beginProgrammaticLoad: () => void;
-  appendToProgrammaticLoad: (text: string) => void;
-  commitProgrammaticLoad: (options?: { emitChange?: boolean }) => void;
-  cancelProgrammaticLoad: () => void;
   setLargeLineSafeMode: (enabled: boolean) => void;
   undoEdit: () => boolean;
   redoEdit: () => boolean;
@@ -145,6 +141,7 @@ export type SettingsPort = {
     fontStyle: FontStyle;
     fontWeight: number;
     textWrapEnabled: boolean;
+    statusBarEnabled: boolean;
     lastDirectory: string;
   };
   ready: Accessor<boolean>;
@@ -156,6 +153,7 @@ export type SettingsPort = {
     setFontStyle: (fontStyle: FontStyle) => Promise<void>;
     setFontWeight: (fontWeight: number) => Promise<void>;
     setTextWrapEnabled: (enabled: boolean) => Promise<void>;
+    setStatusBarEnabled: (enabled: boolean) => Promise<void>;
     setLastDirectory: (path: string) => Promise<void>;
   };
 };

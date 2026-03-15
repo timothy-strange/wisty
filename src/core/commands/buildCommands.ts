@@ -30,10 +30,12 @@ type BuildCommandsDeps = {
     state: {
       themeMode: "light" | "dark";
       textWrapEnabled: boolean;
+      statusBarEnabled: boolean;
     };
     actions: {
       setThemeMode: (mode: "light" | "dark") => Promise<void>;
       setTextWrapEnabled: (enabled: boolean) => Promise<void>;
+      setStatusBarEnabled: (enabled: boolean) => Promise<void>;
     };
   };
   showAbout: () => Promise<void>;
@@ -169,6 +171,13 @@ export const buildCommands = (deps: BuildCommandsDeps): { definitions: CommandDe
       checked: () => !deps.fileLifecycle.safeModeActive() && deps.settings.state.textWrapEnabled
     },
     {
+      id: "view.statusBar",
+      label: "Status Bar",
+      refocusEditorOnMenuSelect: true,
+      run: () => deps.settings.actions.setStatusBarEnabled(!deps.settings.state.statusBarEnabled),
+      checked: () => deps.settings.state.statusBarEnabled
+    },
+    {
       id: "view.font.browser",
       label: "Font...",
       refocusEditorOnMenuSelect: true,
@@ -217,6 +226,7 @@ export const buildCommands = (deps: BuildCommandsDeps): { definitions: CommandDe
         { type: "command", commandId: "view.theme.dark" },
         { type: "separator" },
         { type: "command", commandId: "view.wrap" },
+        { type: "command", commandId: "view.statusBar" },
         { type: "separator" },
         { type: "command", commandId: "view.font.browser" }
       ]
