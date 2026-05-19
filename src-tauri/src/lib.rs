@@ -6,6 +6,8 @@ use std::fs::OpenOptions;
 use std::io::BufWriter;
 use std::io::ErrorKind;
 use std::io::{IsTerminal, Read, Write};
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -676,6 +678,18 @@ fn start_save_file_stream(
     };
 
     let temp_path = build_save_temp_path(&target_path, &stream_id)?;
+    #[cfg(unix)]
+    let existing_mode = match std::fs::metadata(&target_path) {
+        Ok(metadata) => Some(metadata.permissions().mode()),
+        Err(error) if error.kind() == ErrorKind::NotFound => None,
+        Err(error) => {
+            return Err(format!(
+                "Unable to read permissions for '{}': {error}",
+                target_path.to_string_lossy()
+            ));
+        }
+    };
+
     let file = OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -686,6 +700,19 @@ fn start_save_file_stream(
                 temp_path.to_string_lossy()
             )
         })?;
+
+    #[cfg(unix)]
+    if let Some(mode) = existing_mode {
+        if let Err(error) =
+            std::fs::set_permissions(&temp_path, std::fs::Permissions::from_mode(mode))
+        {
+            let _ = std::fs::remove_file(&temp_path);
+            return Err(format!(
+                "Unable to copy permissions to temporary save file '{}': {error}",
+                temp_path.to_string_lossy()
+            ));
+        }
+    }
 
     let stream = SaveFileStream {
         target_path,
