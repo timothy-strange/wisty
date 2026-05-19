@@ -1,5 +1,8 @@
-import { openSearchPanel, searchPanelOpen } from "@codemirror/search";
+import { closeSearchPanel, openSearchPanel, searchPanelOpen } from "@codemirror/search";
 import type { EditorView } from "@codemirror/view";
+
+const FIND_INPUT_SELECTOR = ".cm-search input[name='search']";
+const REPLACE_INPUT_SELECTOR = ".cm-search input[name='replace']";
 
 const focusInput = (view: EditorView, selector: string) => {
   const focusNow = () => {
@@ -28,16 +31,35 @@ const ensurePanelOpen = (view: EditorView): boolean => {
   return openSearchPanel(view);
 };
 
+const inputIsFocused = (view: EditorView, selector: string): boolean => {
+  return view.dom.querySelector(selector) === document.activeElement;
+};
+
+const closePanelAndFocusEditor = (view: EditorView): void => {
+  closeSearchPanel(view);
+  view.focus();
+};
+
 export const createSearchPanelAdapter = () => {
   const openOrFocusFindPanel = (view: EditorView): boolean => {
+    if (searchPanelOpen(view.state) && inputIsFocused(view, FIND_INPUT_SELECTOR)) {
+      closePanelAndFocusEditor(view);
+      return true;
+    }
+
     const opened = ensurePanelOpen(view);
-    focusInput(view, ".cm-search input[name='search']");
+    focusInput(view, FIND_INPUT_SELECTOR);
     return opened;
   };
 
   const openOrFocusReplacePanel = (view: EditorView): boolean => {
+    if (searchPanelOpen(view.state) && inputIsFocused(view, REPLACE_INPUT_SELECTOR)) {
+      closePanelAndFocusEditor(view);
+      return true;
+    }
+
     const opened = ensurePanelOpen(view);
-    focusInput(view, ".cm-search input[name='replace']");
+    focusInput(view, REPLACE_INPUT_SELECTOR);
     return opened;
   };
 
