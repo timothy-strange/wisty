@@ -143,6 +143,7 @@ export type SettingsPort = {
     textWrapEnabled: boolean;
     statusBarEnabled: boolean;
     lastDirectory: string;
+    recentFiles: string[];
   };
   ready: Accessor<boolean>;
   load: () => Promise<void>;
@@ -155,5 +156,6 @@ export type SettingsPort = {
     setTextWrapEnabled: (enabled: boolean) => Promise<void>;
     setStatusBarEnabled: (enabled: boolean) => Promise<void>;
     setLastDirectory: (path: string) => Promise<void>;
+    addRecentFile: (filePath: string) => Promise<void>;
   };
 };

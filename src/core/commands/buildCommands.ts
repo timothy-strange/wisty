@@ -1,6 +1,12 @@
 import type { CommandDefinition, MenuSection } from "./commandRegistry";
 import type { Accessor } from "solid-js";
 
+const fileNameFromPath = (filePath: string): string => {
+  const normalized = filePath.replace(/\\/g, "/");
+  const segments = normalized.split("/");
+  return segments[segments.length - 1] || filePath;
+};
+
 type BuildCommandsDeps = {
   platform: {
     isMac: boolean;
@@ -12,6 +18,7 @@ type BuildCommandsDeps = {
   fileLifecycle: {
     newFile: () => Promise<void>;
     openFile: () => Promise<void>;
+    openFileAtPath: (filePath: string) => Promise<void>;
     saveFile: () => Promise<void>;
     saveFileAs: () => Promise<void>;
     chooseEditorFont: () => Promise<void>;
@@ -31,6 +38,7 @@ type BuildCommandsDeps = {
       themeMode: "light" | "dark";
       textWrapEnabled: boolean;
       statusBarEnabled: boolean;
+      recentFiles: string[];
     };
     actions: {
       setThemeMode: (mode: "light" | "dark") => Promise<void>;
@@ -74,6 +82,39 @@ export const buildCommands = (deps: BuildCommandsDeps): { definitions: CommandDe
       label: "Quit",
       shortcut: commandShortcut(deps.platform.isMac, "Q"),
       run: deps.closeFlow.requestClose
+    },
+    {
+      id: "file.recent.1",
+      label: "Recent File 1",
+      getLabel: () => {
+        const f = deps.settings.state.recentFiles[0];
+        return f ? `1. ${fileNameFromPath(f)}` : "1.";
+      },
+      shortcut: commandShortcut(deps.platform.isMac, "1"),
+      enabled: () => deps.settings.state.recentFiles.length >= 1,
+      run: () => deps.closeFlow.runOrConfirmDiscard(() => deps.fileLifecycle.openFileAtPath(deps.settings.state.recentFiles[0]))
+    },
+    {
+      id: "file.recent.2",
+      label: "Recent File 2",
+      getLabel: () => {
+        const f = deps.settings.state.recentFiles[1];
+        return f ? `2. ${fileNameFromPath(f)}` : "2.";
+      },
+      shortcut: commandShortcut(deps.platform.isMac, "2"),
+      enabled: () => deps.settings.state.recentFiles.length >= 2,
+      run: () => deps.closeFlow.runOrConfirmDiscard(() => deps.fileLifecycle.openFileAtPath(deps.settings.state.recentFiles[1]))
+    },
+    {
+      id: "file.recent.3",
+      label: "Recent File 3",
+      getLabel: () => {
+        const f = deps.settings.state.recentFiles[2];
+        return f ? `3. ${fileNameFromPath(f)}` : "3.";
+      },
+      shortcut: commandShortcut(deps.platform.isMac, "3"),
+      enabled: () => deps.settings.state.recentFiles.length >= 3,
+      run: () => deps.closeFlow.runOrConfirmDiscard(() => deps.fileLifecycle.openFileAtPath(deps.settings.state.recentFiles[2]))
     },
     {
       id: "edit.undo",
@@ -200,6 +241,10 @@ export const buildCommands = (deps: BuildCommandsDeps): { definitions: CommandDe
         { type: "separator" },
         { type: "command", commandId: "file.save" },
         { type: "command", commandId: "file.saveAs" },
+        { type: "separator", visible: () => deps.settings.state.recentFiles.length > 0 },
+        { type: "command", commandId: "file.recent.1", visible: () => deps.settings.state.recentFiles.length >= 1 },
+        { type: "command", commandId: "file.recent.2", visible: () => deps.settings.state.recentFiles.length >= 2 },
+        { type: "command", commandId: "file.recent.3", visible: () => deps.settings.state.recentFiles.length >= 3 },
         { type: "separator" },
         { type: "command", commandId: "file.quit" }
       ]

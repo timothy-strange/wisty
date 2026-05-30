@@ -1,6 +1,7 @@
 export type CommandDefinition = {
   id: string;
   label: string;
+  getLabel?: () => string;
   shortcut?: string;
   run: () => void | Promise<void>;
   enabled?: () => boolean;
@@ -11,8 +12,10 @@ export type CommandDefinition = {
 export type MenuItem = {
   type: "command";
   commandId: string;
+  visible?: () => boolean;
 } | {
   type: "separator";
+  visible?: () => boolean;
 };
 
 export type MenuSection = {

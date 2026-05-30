@@ -68,6 +68,13 @@ export const createSettingsStore = () => {
     await saveSetting("lastDirectory", lastDirectory);
   };
 
+  const addRecentFile = async (filePath: string) => {
+    const filtered = state.recentFiles.filter((f) => f !== filePath);
+    const next = [filePath, ...filtered].slice(0, 3);
+    setState({ recentFiles: next });
+    await saveSetting("recentFiles", next);
+  };
+
   const load = async () => {
     backingStore = await Store.load(SETTINGS_FILE);
 
@@ -79,6 +86,7 @@ export const createSettingsStore = () => {
     const loadedTextWrapEnabled = await backingStore.get("textWrapEnabled");
     const loadedStatusBarEnabled = await backingStore.get("statusBarEnabled");
     const loadedLastDirectory = await backingStore.get("lastDirectory");
+    const loadedRecentFiles = await backingStore.get("recentFiles");
 
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
 
@@ -94,7 +102,10 @@ export const createSettingsStore = () => {
       statusBarEnabled: typeof loadedStatusBarEnabled === "boolean"
         ? loadedStatusBarEnabled
         : DEFAULT_SETTINGS.statusBarEnabled,
-      lastDirectory: typeof loadedLastDirectory === "string" ? loadedLastDirectory : DEFAULT_SETTINGS.lastDirectory
+      lastDirectory: typeof loadedLastDirectory === "string" ? loadedLastDirectory : DEFAULT_SETTINGS.lastDirectory,
+      recentFiles: Array.isArray(loadedRecentFiles) && loadedRecentFiles.every((f) => typeof f === "string")
+        ? (loadedRecentFiles as string[]).slice(0, 3)
+        : DEFAULT_SETTINGS.recentFiles
     });
 
     setReady(true);
@@ -112,7 +123,8 @@ export const createSettingsStore = () => {
       setFontWeight,
       setTextWrapEnabled,
       setStatusBarEnabled,
-      setLastDirectory
+      setLastDirectory,
+      addRecentFile
     }
   };
 };

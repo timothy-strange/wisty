@@ -473,6 +473,7 @@ export const useFileLifecycle = (deps: UseFileLifecycleDeps) => {
       await loadEditorFileAsCleanFromFsStream(selected.filePath, fileSize);
       deps.document.setFilePath(selected.filePath);
       await deps.settings.actions.setLastDirectory(deps.fileIo.getDirectoryFromFilePath(selected.filePath));
+      await deps.settings.actions.addRecentFile(selected.filePath);
       deps.editor.focus();
     }, "Unable to open file");
   };
@@ -482,6 +483,7 @@ export const useFileLifecycle = (deps: UseFileLifecycleDeps) => {
       await loadEditorFileAsCleanFromFsStream(filePath);
       deps.document.setFilePath(filePath);
       await deps.settings.actions.setLastDirectory(deps.fileIo.getDirectoryFromFilePath(filePath));
+      await deps.settings.actions.addRecentFile(filePath);
       deps.editor.focus();
     }, "Unable to open file");
   };
@@ -491,6 +493,7 @@ export const useFileLifecycle = (deps: UseFileLifecycleDeps) => {
       await loadEditorFileAsCleanFromLaunchStream(filePath, fileSizeBytes);
       deps.document.setFilePath(filePath);
       await deps.settings.actions.setLastDirectory(deps.fileIo.getDirectoryFromFilePath(filePath));
+      await deps.settings.actions.addRecentFile(filePath);
       deps.editor.focus();
     }, "Unable to open launch file");
   };
@@ -592,6 +595,7 @@ export const useFileLifecycle = (deps: UseFileLifecycleDeps) => {
       deps.document.setFilePath(result.filePath);
       deps.document.markCleanAt(deps.editor.getRevision());
       await deps.settings.actions.setLastDirectory(deps.fileIo.getDirectoryFromFilePath(result.filePath));
+      await deps.settings.actions.addRecentFile(result.filePath);
       deps.editor.focus();
     }, "Unable to save file");
   };

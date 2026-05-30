@@ -17,6 +17,7 @@ export type AppSettings = {
   textWrapEnabled: boolean;
   statusBarEnabled: boolean;
   lastDirectory: string;
+  recentFiles: string[];
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -27,5 +28,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   fontWeight: 400,
   textWrapEnabled: true,
   statusBarEnabled: true,
-  lastDirectory: ""
+  lastDirectory: "",
+  recentFiles: []
 };

@@ -12,10 +12,11 @@ import { useCommandsContext, useMenuContext } from "../core/app/appContexts";
 import { CommandDefinition } from "../core/commands/commandRegistry";
 
 const commandLabel = (definition: CommandDefinition) => {
+  const label = definition.getLabel ? definition.getLabel() : definition.label;
   if (!definition.checked) {
-    return definition.label;
+    return label;
   }
-  return `${definition.label}${definition.checked() ? " ✓" : ""}`;
+  return `${label}${definition.checked() ? " ✓" : ""}`;
 };
 
 export const MenuBar = () => {
@@ -78,6 +79,7 @@ export const MenuBar = () => {
               >
                 <For each={section.items}>
                   {(item) => {
+                    if (item.visible && !item.visible()) return null;
                     if (item.type === "separator") {
                       return <MenubarSeparator class="menu-separator" />;
                     }
