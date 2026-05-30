@@ -233,6 +233,10 @@ function App() {
     confirmDiscardOpen: closeFlow.confirmDiscardOpen,
     resolveConfirmDiscard: closeFlow.resolveConfirmDiscard,
     menuPanelOpen: menuState.menuPanelOpen,
+    closeMenu: () => {
+      menuState.setMenuPanelOpen(false);
+      menuState.setActiveMenuId(null);
+    },
     openMenuByMnemonic: menuState.openByMnemonic,
     dispatchShortcut: (event) => shortcutRouter.dispatch(event)
   });

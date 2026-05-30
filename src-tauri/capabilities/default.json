@@ -23,6 +23,22 @@
         }
       ]
     },
+    {
+      "identifier": "fs:allow-stat",
+      "allow": [
+        {
+          "path": "**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-open",
+      "allow": [
+        {
+          "path": "**"
+        }
+      ]
+    },
     "fs:read-all",
     "fs:write-all",
     "dialog:allow-open",

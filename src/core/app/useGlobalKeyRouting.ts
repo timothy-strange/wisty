@@ -11,6 +11,7 @@ type UseGlobalKeyRoutingOptions = {
   confirmDiscardOpen: Accessor<boolean>;
   resolveConfirmDiscard: (shouldDiscard: boolean) => Promise<void>;
   menuPanelOpen: Accessor<boolean>;
+  closeMenu: () => void;
   openMenuByMnemonic: (key: string) => boolean;
   dispatchShortcut: (event: KeyboardEvent) => boolean;
 };
@@ -65,6 +66,10 @@ export const useGlobalKeyRouting = (options: UseGlobalKeyRoutingOptions) => {
     }
 
     if (options.menuPanelOpen()) {
+      const matched = options.dispatchShortcut(event);
+      if (matched) {
+        options.closeMenu();
+      }
       return;
     }
 
