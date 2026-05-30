@@ -11,9 +11,12 @@ type UseGlobalKeyRoutingOptions = {
   confirmDiscardOpen: Accessor<boolean>;
   resolveConfirmDiscard: (shouldDiscard: boolean) => Promise<void>;
   menuPanelOpen: Accessor<boolean>;
+  activeMenuId: Accessor<string | null>;
   closeMenu: () => void;
   openMenuByMnemonic: (key: string) => boolean;
   dispatchShortcut: (event: KeyboardEvent) => boolean;
+  executeCommand: (id: string) => Promise<boolean>;
+  focusEditor: () => void;
 };
 
 export const useGlobalKeyRouting = (options: UseGlobalKeyRoutingOptions) => {
@@ -69,6 +72,20 @@ export const useGlobalKeyRouting = (options: UseGlobalKeyRoutingOptions) => {
       const matched = options.dispatchShortcut(event);
       if (matched) {
         options.closeMenu();
+        return;
+      }
+      if (options.activeMenuId() === "file" && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
+        const recentIds: Record<string, string> = { "1": "file.recent.1", "2": "file.recent.2", "3": "file.recent.3" };
+        const commandId = recentIds[event.key];
+        if (commandId) {
+          event.preventDefault();
+          void options.executeCommand(commandId).then((executed) => {
+            if (executed) {
+              options.closeMenu();
+              requestAnimationFrame(() => options.focusEditor());
+            }
+          });
+        }
       }
       return;
     }

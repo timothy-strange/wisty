@@ -233,12 +233,15 @@ function App() {
     confirmDiscardOpen: closeFlow.confirmDiscardOpen,
     resolveConfirmDiscard: closeFlow.resolveConfirmDiscard,
     menuPanelOpen: menuState.menuPanelOpen,
+    activeMenuId: menuState.activeMenuId,
     closeMenu: () => {
       menuState.setMenuPanelOpen(false);
       menuState.setActiveMenuId(null);
     },
     openMenuByMnemonic: menuState.openByMnemonic,
-    dispatchShortcut: (event) => shortcutRouter.dispatch(event)
+    dispatchShortcut: (event) => shortcutRouter.dispatch(event),
+    executeCommand: (id) => commandRegistry.execute(id),
+    focusEditor: () => editorAdapter.focus()
   });
 
   const commandsContextValue = {
