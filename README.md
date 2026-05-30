@@ -2,7 +2,7 @@
 
 Wisty is a lightweight text editor for Linux with a clean, elegant look. It is intended for general use (don't expect code highlighting). It only handles UTF-8 files and has support for very large files (streamed read/write, will attempt to open files up to 1GB).
 
-Wisty was originally a fork of [Parchment](https://github.com/tywil04/parchment) but has been completely rewritten in Typescript. (Disclaimer: wisty was vibecoded, but with an emphasis good coding practices).
+Wisty was originally a fork of [Parchment](https://github.com/tywil04/parchment) but has been completely rewritten in Typescript using AI tools.
 
 ![wisty light](images/wisty-light.png)
 ![wisty dark](images/wisty-dark.png)
