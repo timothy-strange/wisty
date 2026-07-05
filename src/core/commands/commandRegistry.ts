@@ -16,6 +16,13 @@ export type MenuItem = {
 } | {
   type: "separator";
   visible?: () => boolean;
+} | {
+  type: "submenu";
+  id: string;
+  label: string;
+  getLabel?: () => string;
+  visible?: () => boolean;
+  items: () => MenuItem[];
 };
 
 export type MenuSection = {
@@ -28,12 +35,18 @@ export type CommandRegistry = {
   definitions: CommandDefinition[];
   get: (id: string) => CommandDefinition | undefined;
   execute: (id: string) => Promise<boolean>;
+  register: (definition: CommandDefinition) => void;
 };
 
 export const createCommandRegistry = (definitions: CommandDefinition[]): CommandRegistry => {
   const commandMap = new Map(definitions.map((definition) => [definition.id, definition]));
 
   const get = (id: string) => commandMap.get(id);
+
+  /** Registers (or replaces) a command at runtime, e.g. dynamically-discovered items. */
+  const register = (definition: CommandDefinition) => {
+    commandMap.set(definition.id, definition);
+  };
 
   const execute = async (id: string) => {
     const command = get(id);
@@ -50,6 +63,7 @@ export const createCommandRegistry = (definitions: CommandDefinition[]): Command
   return {
     definitions,
     get,
-    execute
+    execute,
+    register
   };
 };

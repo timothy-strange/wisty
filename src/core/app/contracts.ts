@@ -68,6 +68,7 @@ export type FileDialogsPort = {
 
 export type FileIoPort = {
   getFileSize: (filePath: string) => Promise<number>;
+  fileExists: (filePath: string) => Promise<boolean>;
   readTextFile: (filePath: string) => Promise<string>;
   streamReadTextFile: (
     filePath: string,
@@ -157,5 +158,7 @@ export type SettingsPort = {
     setStatusBarEnabled: (enabled: boolean) => Promise<void>;
     setLastDirectory: (path: string) => Promise<void>;
     addRecentFile: (filePath: string) => Promise<void>;
+    setRecentFiles: (filePaths: string[]) => Promise<void>;
+    removeRecentFile: (filePath: string) => Promise<void>;
   };
 };

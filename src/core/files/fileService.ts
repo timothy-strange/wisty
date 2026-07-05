@@ -156,4 +156,13 @@ export const getFileSize = async (filePath: string): Promise<number> => {
   return metadata.size;
 };
 
+export const fileExists = async (filePath: string): Promise<boolean> => {
+  try {
+    const metadata = await stat(filePath);
+    return metadata.isFile;
+  } catch {
+    return false;
+  }
+};
+
 export const getDirectoryFromFilePath = (filePath: string): string => directoryFromPath(filePath);

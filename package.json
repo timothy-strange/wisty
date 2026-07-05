@@ -1,6 +1,6 @@
 {
   "name": "wisty",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "Plain text editor",
   "type": "module",
   "scripts": {

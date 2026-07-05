@@ -860,6 +860,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .manage(LaunchArgState::new(launch_file))
+        .manage(spellcheck::SpellState::default())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -877,9 +878,16 @@ pub fn run() {
             write_save_file_chunk,
             finish_save_file_stream,
             cancel_save_file_stream,
-            window_title::set_window_title
+            window_title::set_window_title,
+            spellcheck::spell_list_dictionaries,
+            spellcheck::spell_load_dictionary,
+            spellcheck::spell_check_words,
+            spellcheck::spell_suggest,
+            spellcheck::spell_add_word,
+            spellcheck::spell_ignore_word
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+mod spellcheck;
 mod window_title;

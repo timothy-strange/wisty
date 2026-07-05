@@ -1,5 +1,9 @@
-import type { CommandDefinition, MenuSection } from "./commandRegistry";
+import type { CommandDefinition, MenuItem, MenuSection } from "./commandRegistry";
 import type { Accessor } from "solid-js";
+import type { DictionaryInfo } from "../spellcheck/spellService";
+
+/** Stable command id for selecting a given spell-check dictionary. */
+export const spellLanguageCommandId = (code: string) => `view.spellCheck.lang.${code}`;
 
 const fileNameFromPath = (filePath: string): string => {
   const normalized = filePath.replace(/\\/g, "/");
@@ -38,13 +42,21 @@ type BuildCommandsDeps = {
       themeMode: "light" | "dark";
       textWrapEnabled: boolean;
       statusBarEnabled: boolean;
+      spellCheckEnabled: boolean;
+      spellCheckLanguage: string;
       recentFiles: string[];
     };
     actions: {
       setThemeMode: (mode: "light" | "dark") => Promise<void>;
       setTextWrapEnabled: (enabled: boolean) => Promise<void>;
       setStatusBarEnabled: (enabled: boolean) => Promise<void>;
+      setSpellCheckEnabled: (enabled: boolean) => Promise<void>;
+      setSpellCheckLanguage: (language: string) => Promise<void>;
     };
+  };
+  spell: {
+    dictionaries: Accessor<DictionaryInfo[]>;
+    showInstallHelp: () => void;
   };
   showAbout: () => Promise<void>;
 };
@@ -219,6 +231,24 @@ export const buildCommands = (deps: BuildCommandsDeps): { definitions: CommandDe
       checked: () => deps.settings.state.statusBarEnabled
     },
     {
+      id: "view.spellCheck.off",
+      label: "Off",
+      refocusEditorOnMenuSelect: true,
+      run: () => deps.settings.actions.setSpellCheckEnabled(false),
+      checked: () => !deps.settings.state.spellCheckEnabled
+    },
+    {
+      id: "view.spellCheck.none",
+      label: "No dictionaries installed",
+      enabled: () => false,
+      run: () => {}
+    },
+    {
+      id: "view.spellCheck.help",
+      label: "How to Install Dictionaries...",
+      run: () => deps.spell.showInstallHelp()
+    },
+    {
       id: "view.font.browser",
       label: "Font...",
       refocusEditorOnMenuSelect: true,
@@ -272,6 +302,28 @@ export const buildCommands = (deps: BuildCommandsDeps): { definitions: CommandDe
         { type: "separator" },
         { type: "command", commandId: "view.wrap" },
         { type: "command", commandId: "view.statusBar" },
+        {
+          type: "submenu",
+          id: "view.spellCheck",
+          label: "Spell Check",
+          items: (): MenuItem[] => {
+            const dictionaries = deps.spell.dictionaries();
+            if (dictionaries.length === 0) {
+              return [
+                { type: "command", commandId: "view.spellCheck.none" },
+                { type: "command", commandId: "view.spellCheck.help" }
+              ];
+            }
+            return [
+              { type: "command", commandId: "view.spellCheck.off" },
+              { type: "separator" },
+              ...dictionaries.map((dictionary): MenuItem => ({
+                type: "command",
+                commandId: spellLanguageCommandId(dictionary.code)
+              }))
+            ];
+          }
+        },
         { type: "separator" },
         { type: "command", commandId: "view.font.browser" }
       ]

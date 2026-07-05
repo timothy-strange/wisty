@@ -16,6 +16,8 @@ export type AppSettings = {
   fontWeight: number;
   textWrapEnabled: boolean;
   statusBarEnabled: boolean;
+  spellCheckEnabled: boolean;
+  spellCheckLanguage: string;
   lastDirectory: string;
   recentFiles: string[];
 };
@@ -28,6 +30,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   fontWeight: 400,
   textWrapEnabled: true,
   statusBarEnabled: true,
+  spellCheckEnabled: false,
+  spellCheckLanguage: "en_US",
   lastDirectory: "",
   recentFiles: []
 };

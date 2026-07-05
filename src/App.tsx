@@ -4,7 +4,8 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import "./App.css";
 import { AppShell } from "./components/AppShell";
 import { createCommandRegistry } from "./core/commands/commandRegistry";
-import { buildCommands } from "./core/commands/buildCommands";
+import { buildCommands, spellLanguageCommandId } from "./core/commands/buildCommands";
+import type { DictionaryInfo } from "./core/spellcheck/spellService";
 import { createShortcutRouter } from "./core/commands/shortcutRouter";
 import type { ErrorReporter } from "./core/app/contracts";
 import { CommandsProvider, MenuProvider } from "./core/app/appContexts";
@@ -19,6 +20,7 @@ import { useErrorModalQueue } from "./core/app/useErrorModalQueue";
 import { createDocumentStore } from "./core/document/documentStore";
 import { createEditorAdapter } from "./core/editor/editorAdapter";
 import {
+  fileExists,
   getDirectoryFromFilePath,
   getFileSize,
   openTextFile,
@@ -73,6 +75,7 @@ function App() {
   const [largeFileDialog, setLargeFileDialog] = createSignal<LargeFileDialogState | null>(null);
   const [cursorLine, setCursorLine] = createSignal(1);
   const [totalLines, setTotalLines] = createSignal(1);
+  const [spellDictionaries, setSpellDictionaries] = createSignal<DictionaryInfo[]>([]);
   const errorModalQueue = useErrorModalQueue();
 
   let editorHostRef: HTMLDivElement | undefined;
@@ -136,6 +139,7 @@ function App() {
     },
     fileIo: {
       getFileSize,
+      fileExists,
       readTextFile: readTextFileAtPath,
       streamReadTextFile: streamReadTextFileAtPath,
       saveTextFile,
@@ -188,16 +192,77 @@ function App() {
     });
   };
 
+  const loadSettingsAndPruneRecentFiles = async () => {
+    await settingsStore.load();
+    const recentFiles = settingsStore.state.recentFiles;
+    const existing = await Promise.all(recentFiles.map(async (filePath) => ({
+      filePath,
+      exists: await fileExists(filePath)
+    })));
+    const nextRecentFiles = existing.filter((entry) => entry.exists).map((entry) => entry.filePath);
+    if (nextRecentFiles.length !== recentFiles.length) {
+      await settingsStore.actions.setRecentFiles(nextRecentFiles);
+    }
+    await loadSpellDictionaries();
+  };
+
+  const loadSpellDictionaries = async () => {
+    const dictionaries = await editorAdapter.listSpellDictionaries();
+    setSpellDictionaries(dictionaries);
+
+    if (dictionaries.length === 0) {
+      if (settingsStore.state.spellCheckEnabled) {
+        await settingsStore.actions.setSpellCheckEnabled(false);
+      }
+      return;
+    }
+    if (!dictionaries.some((entry) => entry.code === settingsStore.state.spellCheckLanguage)) {
+      await settingsStore.actions.setSpellCheckLanguage(dictionaries[0].code);
+    }
+  };
+
+  const showSpellInstallHelp = () => {
+    errorModalQueue.enqueue({
+      title: "Spell Check",
+      message:
+        "No spell-check dictionaries were found. Wisty reads hunspell dictionaries from "
+        + "/usr/share/hunspell — the same ones LibreOffice uses. Install one for your language and "
+        + "re-open the Spell Check menu. For example, “sudo apt install hunspell-en-us” on "
+        + "Debian or Ubuntu, or “sudo dnf install hunspell-en” on Fedora."
+    });
+  };
+
   const { definitions, sections } = buildCommands({
     platform: { isMac: PLATFORM_IS_MAC },
     closeFlow,
     fileLifecycle,
     editor: editorAdapter,
     settings: settingsStore,
+    spell: {
+      dictionaries: spellDictionaries,
+      showInstallHelp: showSpellInstallHelp
+    },
     showAbout: openAboutDialog
   });
 
   const commandRegistry = createCommandRegistry(definitions);
+
+  createEffect(() => {
+    for (const dictionary of spellDictionaries()) {
+      commandRegistry.register({
+        id: spellLanguageCommandId(dictionary.code),
+        label: dictionary.label,
+        refocusEditorOnMenuSelect: true,
+        checked: () =>
+          settingsStore.state.spellCheckEnabled
+          && settingsStore.state.spellCheckLanguage === dictionary.code,
+        run: async () => {
+          await settingsStore.actions.setSpellCheckLanguage(dictionary.code);
+          await settingsStore.actions.setSpellCheckEnabled(true);
+        }
+      });
+    }
+  });
   const isInteractionBlocked = () =>
     fileLifecycle.loadingState.isLoading()
     || fileLifecycle.savingState.isSaving()
@@ -262,7 +327,7 @@ function App() {
     getEditorHost: () => editorHostRef,
     editor: editorAdapter,
     document: documentStore,
-    loadSettings: () => settingsStore.load(),
+    loadSettings: loadSettingsAndPruneRecentFiles,
     onSettingsLoadError: async (error) => {
       const appError = toAppError(error, "SETTINGS_LOAD_FAILED", "Unable to load settings");
       errorModalQueue.enqueue({
@@ -304,6 +369,13 @@ function App() {
     settingsStore.state.fontWeight;
     settingsStore.state.textWrapEnabled;
     editorAdapter.applySettings();
+  });
+
+  createEffect(() => {
+    void editorAdapter.configureSpellcheck({
+      enabled: settingsStore.state.spellCheckEnabled,
+      language: settingsStore.state.spellCheckLanguage
+    });
   });
 
   useWindowTitleSync({

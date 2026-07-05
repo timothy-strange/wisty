@@ -480,11 +480,18 @@ export const useFileLifecycle = (deps: UseFileLifecycleDeps) => {
 
   const openFileAtPath = async (filePath: string) => {
     await runWithErrorMessage(async () => {
-      await loadEditorFileAsCleanFromFsStream(filePath);
-      deps.document.setFilePath(filePath);
-      await deps.settings.actions.setLastDirectory(deps.fileIo.getDirectoryFromFilePath(filePath));
-      await deps.settings.actions.addRecentFile(filePath);
-      deps.editor.focus();
+      try {
+        await loadEditorFileAsCleanFromFsStream(filePath);
+        deps.document.setFilePath(filePath);
+        await deps.settings.actions.setLastDirectory(deps.fileIo.getDirectoryFromFilePath(filePath));
+        await deps.settings.actions.addRecentFile(filePath);
+        deps.editor.focus();
+      } catch (error) {
+        if (!await deps.fileIo.fileExists(filePath)) {
+          await deps.settings.actions.removeRecentFile(filePath);
+        }
+        throw error;
+      }
     }, "Unable to open file");
   };
 

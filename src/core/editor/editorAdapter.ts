@@ -1,10 +1,12 @@
 import { Compartment, EditorState, Transaction } from "@codemirror/state";
-import { defaultKeymap, history, isolateHistory, redo, undo } from "@codemirror/commands";
+import { defaultKeymap, history, indentWithTab, isolateHistory, redo, undo } from "@codemirror/commands";
 import { search, searchKeymap } from "@codemirror/search";
 import { drawSelection, dropCursor, EditorView, keymap } from "@codemirror/view";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { AppSettings } from "../settings/settingsTypes";
 import { createSearchPanelAdapter } from "./searchPanelAdapter";
+import { createSpellService } from "../spellcheck/spellService";
+import { createSpellcheckExtension, requestSpellRescan } from "../spellcheck/spellcheckExtension";
 
 type DocChangedPayload = {
   revision: number;
@@ -45,8 +47,14 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
   let lastReportedTotalLines: number | undefined;
   const searchPanelAdapter = createSearchPanelAdapter();
 
+  const spellService = createSpellService();
+  const spellExtension = createSpellcheckExtension(spellService);
+  let spellEnabled = false;
+  let spellLoadedLanguage: string | undefined;
+
   const wrapCompartment = new Compartment();
   const styleCompartment = new Compartment();
+  const spellCompartment = new Compartment();
 
   const createStyleExtension = () => {
     const settings = options.getSettings();
@@ -215,10 +223,12 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
         drawSelection(),
         dropCursor(),
         keymap.of([
+          indentWithTab,
           ...defaultKeymap,
           ...searchKeymap.filter((binding) => binding.key !== "Mod-f")
         ]),
         wrapCompartment.of(!largeLineSafeModeEnabled && settings.textWrapEnabled ? EditorView.lineWrapping : []),
+        spellCompartment.of(spellEnabled ? spellExtension : []),
         styleCompartment.of(createStyleExtension()),
         EditorView.updateListener.of((update) => {
           if (update.docChanged || update.selectionSet) {
@@ -396,6 +406,27 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
     });
   };
 
+  const listSpellDictionaries = () => spellService.listDictionaries();
+
+  const configureSpellcheck = async ({ enabled, language }: { enabled: boolean; language: string }) => {
+    if (enabled && language && language !== spellLoadedLanguage) {
+      const loaded = await spellService.loadDictionary(language);
+      spellLoadedLanguage = loaded ? language : undefined;
+    }
+
+    spellEnabled = enabled && spellLoadedLanguage !== undefined;
+
+    if (!editorView) {
+      return;
+    }
+    editorView.dispatch({
+      effects: spellCompartment.reconfigure(spellEnabled ? spellExtension : [])
+    });
+    if (spellEnabled) {
+      editorView.dispatch({ effects: requestSpellRescan.of(null) });
+    }
+  };
+
   const setLargeLineSafeMode = (enabled: boolean) => {
     if (largeLineSafeModeEnabled === enabled) {
       return;
@@ -507,6 +538,8 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
     append,
     reset,
     setLargeLineSafeMode,
+    listSpellDictionaries,
+    configureSpellcheck,
     applySettings,
     openOrFocusFindPanel,
     openOrFocusReplacePanel,

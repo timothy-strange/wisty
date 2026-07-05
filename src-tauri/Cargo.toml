@@ -1,6 +1,6 @@
 [package]
 name = "wisty"
-version = "2.2.0"
+version = "2.2.1"
 description = "Plain text editor"
 license = "GPL-3.0-or-later"
 authors = ["Wisty contributors"]
@@ -30,3 +30,4 @@ gtk = "0.18"
 log = "0.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+hunspell-rs = "0.4.0"

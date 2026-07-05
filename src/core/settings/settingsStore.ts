@@ -63,6 +63,16 @@ export const createSettingsStore = () => {
     await saveSetting("statusBarEnabled", enabled);
   };
 
+  const setSpellCheckEnabled = async (enabled: boolean) => {
+    setState({ spellCheckEnabled: enabled });
+    await saveSetting("spellCheckEnabled", enabled);
+  };
+
+  const setSpellCheckLanguage = async (language: string) => {
+    setState({ spellCheckLanguage: language });
+    await saveSetting("spellCheckLanguage", language);
+  };
+
   const setLastDirectory = async (lastDirectory: string) => {
     setState({ lastDirectory });
     await saveSetting("lastDirectory", lastDirectory);
@@ -71,6 +81,21 @@ export const createSettingsStore = () => {
   const addRecentFile = async (filePath: string) => {
     const filtered = state.recentFiles.filter((f) => f !== filePath);
     const next = [filePath, ...filtered].slice(0, 3);
+    setState({ recentFiles: next });
+    await saveSetting("recentFiles", next);
+  };
+
+  const setRecentFiles = async (recentFiles: string[]) => {
+    const next = recentFiles.slice(0, 3);
+    setState({ recentFiles: next });
+    await saveSetting("recentFiles", next);
+  };
+
+  const removeRecentFile = async (filePath: string) => {
+    const next = state.recentFiles.filter((f) => f !== filePath);
+    if (next.length === state.recentFiles.length) {
+      return;
+    }
     setState({ recentFiles: next });
     await saveSetting("recentFiles", next);
   };
@@ -85,6 +110,8 @@ export const createSettingsStore = () => {
     const loadedFontWeight = await backingStore.get("fontWeight");
     const loadedTextWrapEnabled = await backingStore.get("textWrapEnabled");
     const loadedStatusBarEnabled = await backingStore.get("statusBarEnabled");
+    const loadedSpellCheckEnabled = await backingStore.get("spellCheckEnabled");
+    const loadedSpellCheckLanguage = await backingStore.get("spellCheckLanguage");
     const loadedLastDirectory = await backingStore.get("lastDirectory");
     const loadedRecentFiles = await backingStore.get("recentFiles");
 
@@ -102,6 +129,12 @@ export const createSettingsStore = () => {
       statusBarEnabled: typeof loadedStatusBarEnabled === "boolean"
         ? loadedStatusBarEnabled
         : DEFAULT_SETTINGS.statusBarEnabled,
+      spellCheckEnabled: typeof loadedSpellCheckEnabled === "boolean"
+        ? loadedSpellCheckEnabled
+        : DEFAULT_SETTINGS.spellCheckEnabled,
+      spellCheckLanguage: typeof loadedSpellCheckLanguage === "string" && loadedSpellCheckLanguage.trim().length > 0
+        ? loadedSpellCheckLanguage
+        : DEFAULT_SETTINGS.spellCheckLanguage,
       lastDirectory: typeof loadedLastDirectory === "string" ? loadedLastDirectory : DEFAULT_SETTINGS.lastDirectory,
       recentFiles: Array.isArray(loadedRecentFiles) && loadedRecentFiles.every((f) => typeof f === "string")
         ? (loadedRecentFiles as string[]).slice(0, 3)
@@ -123,8 +156,12 @@ export const createSettingsStore = () => {
       setFontWeight,
       setTextWrapEnabled,
       setStatusBarEnabled,
+      setSpellCheckEnabled,
+      setSpellCheckLanguage,
       setLastDirectory,
-      addRecentFile
+      addRecentFile,
+      setRecentFiles,
+      removeRecentFile
     }
   };
 };
