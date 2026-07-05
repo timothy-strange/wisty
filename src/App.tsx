@@ -225,10 +225,9 @@ function App() {
     errorModalQueue.enqueue({
       title: "Spell Check",
       message:
-        "No spell-check dictionaries were found. Wisty reads hunspell dictionaries from "
-        + "/usr/share/hunspell — the same ones LibreOffice uses. Install one for your language and "
-        + "re-open the Spell Check menu. For example, “sudo apt install hunspell-en-us” on "
-        + "Debian or Ubuntu, or “sudo dnf install hunspell-en” on Fedora."
+        "Install hunspell dictionaries to /usr/share/hunspell. For example, "
+        + "“sudo apt install hunspell-en-us” on Debian/Ubuntu, or “sudo dnf install hunspell-en-US” "
+        + "on Fedora."
     });
   };
 
