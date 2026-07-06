@@ -1,7 +1,7 @@
 import { Compartment, EditorState, Transaction } from "@codemirror/state";
 import { defaultKeymap, history, indentWithTab, isolateHistory, redo, undo } from "@codemirror/commands";
 import { search, searchKeymap } from "@codemirror/search";
-import { drawSelection, dropCursor, EditorView, keymap } from "@codemirror/view";
+import { drawSelection, dropCursor, EditorView, highlightActiveLine, keymap } from "@codemirror/view";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { AppSettings, FormatViewMode } from "../settings/settingsTypes";
 import {
@@ -62,6 +62,7 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
   let spellDictionaryDirty = false;
 
   const wrapCompartment = new Compartment();
+  const activeLineCompartment = new Compartment();
   const styleCompartment = new Compartment();
   const spellCompartment = new Compartment();
 
@@ -239,6 +240,7 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
           ...searchKeymap.filter((binding) => binding.key !== "Mod-f")
         ]),
         wrapCompartment.of(!largeLineSafeModeEnabled && settings.textWrapEnabled ? EditorView.lineWrapping : []),
+        activeLineCompartment.of(settings.activeLineHighlightEnabled ? highlightActiveLine() : []),
         spellCompartment.of(spellEnabled ? spellExtension : []),
         styleCompartment.of(createStyleExtension()),
         formatting.extension,
@@ -419,6 +421,7 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
     editorView.dispatch({
       effects: [
         wrapCompartment.reconfigure(!largeLineSafeModeEnabled && settings.textWrapEnabled ? EditorView.lineWrapping : []),
+        activeLineCompartment.reconfigure(settings.activeLineHighlightEnabled ? highlightActiveLine() : []),
         styleCompartment.reconfigure(createStyleExtension())
       ]
     });

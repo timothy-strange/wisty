@@ -18,6 +18,7 @@ export type AppSettings = {
   fontStyle: FontStyle;
   fontWeight: number;
   textWrapEnabled: boolean;
+  activeLineHighlightEnabled: boolean;
   formatViewMode: FormatViewMode;
   statusBarEnabled: boolean;
   spellCheckEnabled: boolean;
@@ -33,6 +34,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   fontStyle: "normal",
   fontWeight: 400,
   textWrapEnabled: true,
+  activeLineHighlightEnabled: false,
   formatViewMode: "plain",
   statusBarEnabled: true,
   spellCheckEnabled: false,

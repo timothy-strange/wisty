@@ -47,6 +47,7 @@ type BuildCommandsDeps = {
     state: {
       themeMode: "light" | "dark";
       textWrapEnabled: boolean;
+      activeLineHighlightEnabled: boolean;
       formatViewMode: FormatViewMode;
       statusBarEnabled: boolean;
       spellCheckEnabled: boolean;
@@ -56,6 +57,7 @@ type BuildCommandsDeps = {
     actions: {
       setThemeMode: (mode: "light" | "dark") => Promise<void>;
       setTextWrapEnabled: (enabled: boolean) => Promise<void>;
+      setActiveLineHighlightEnabled: (enabled: boolean) => Promise<void>;
       setStatusBarEnabled: (enabled: boolean) => Promise<void>;
       setSpellCheckEnabled: (enabled: boolean) => Promise<void>;
       setSpellCheckLanguage: (language: string) => Promise<void>;
@@ -269,6 +271,14 @@ export const buildCommands = (deps: BuildCommandsDeps): { definitions: CommandDe
       checked: () => deps.settings.state.formatViewMode === "formatted"
     },
     {
+      id: "view.activeLineHighlight",
+      label: "Highlight Current Line",
+      refocusEditorOnMenuSelect: true,
+      run: () =>
+        deps.settings.actions.setActiveLineHighlightEnabled(!deps.settings.state.activeLineHighlightEnabled),
+      checked: () => deps.settings.state.activeLineHighlightEnabled
+    },
+    {
       id: "view.statusBar",
       label: "Status Bar",
       refocusEditorOnMenuSelect: true,
@@ -376,6 +386,7 @@ export const buildCommands = (deps: BuildCommandsDeps): { definitions: CommandDe
         { type: "separator" },
         { type: "command", commandId: "view.wrap" },
         { type: "command", commandId: "view.formatMode" },
+        { type: "command", commandId: "view.activeLineHighlight" },
         { type: "command", commandId: "view.statusBar" },
         {
           type: "submenu",

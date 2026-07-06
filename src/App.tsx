@@ -408,6 +408,7 @@ function App() {
     settingsStore.state.fontStyle;
     settingsStore.state.fontWeight;
     settingsStore.state.textWrapEnabled;
+    settingsStore.state.activeLineHighlightEnabled;
     editorAdapter.applySettings();
   });
 

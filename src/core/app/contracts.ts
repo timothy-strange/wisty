@@ -147,6 +147,7 @@ export type SettingsPort = {
     fontStyle: FontStyle;
     fontWeight: number;
     textWrapEnabled: boolean;
+    activeLineHighlightEnabled: boolean;
     formatViewMode: FormatViewMode;
     statusBarEnabled: boolean;
     lastDirectory: string;
@@ -161,6 +162,7 @@ export type SettingsPort = {
     setFontStyle: (fontStyle: FontStyle) => Promise<void>;
     setFontWeight: (fontWeight: number) => Promise<void>;
     setTextWrapEnabled: (enabled: boolean) => Promise<void>;
+    setActiveLineHighlightEnabled: (enabled: boolean) => Promise<void>;
     setFormatViewMode: (mode: FormatViewMode) => Promise<void>;
     setStatusBarEnabled: (enabled: boolean) => Promise<void>;
     setLastDirectory: (path: string) => Promise<void>;

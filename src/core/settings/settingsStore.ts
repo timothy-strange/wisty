@@ -60,6 +60,11 @@ export const createSettingsStore = () => {
     await saveSetting("textWrapEnabled", enabled);
   };
 
+  const setActiveLineHighlightEnabled = async (enabled: boolean) => {
+    setState({ activeLineHighlightEnabled: enabled });
+    await saveSetting("activeLineHighlightEnabled", enabled);
+  };
+
   const setFormatViewMode = async (formatViewMode: FormatViewMode) => {
     setState({ formatViewMode });
     await saveSetting("formatViewMode", formatViewMode);
@@ -116,6 +121,7 @@ export const createSettingsStore = () => {
     const loadedFontStyle = await backingStore.get("fontStyle");
     const loadedFontWeight = await backingStore.get("fontWeight");
     const loadedTextWrapEnabled = await backingStore.get("textWrapEnabled");
+    const loadedActiveLineHighlightEnabled = await backingStore.get("activeLineHighlightEnabled");
     const loadedFormatViewMode = await backingStore.get("formatViewMode");
     const loadedStatusBarEnabled = await backingStore.get("statusBarEnabled");
     const loadedSpellCheckEnabled = await backingStore.get("spellCheckEnabled");
@@ -134,6 +140,9 @@ export const createSettingsStore = () => {
       fontStyle: isFontStyle(loadedFontStyle) ? loadedFontStyle : DEFAULT_SETTINGS.fontStyle,
       fontWeight: typeof loadedFontWeight === "number" ? clamp(loadedFontWeight, 100, 900) : DEFAULT_SETTINGS.fontWeight,
       textWrapEnabled: typeof loadedTextWrapEnabled === "boolean" ? loadedTextWrapEnabled : DEFAULT_SETTINGS.textWrapEnabled,
+      activeLineHighlightEnabled: typeof loadedActiveLineHighlightEnabled === "boolean"
+        ? loadedActiveLineHighlightEnabled
+        : DEFAULT_SETTINGS.activeLineHighlightEnabled,
       formatViewMode: isFormatViewMode(loadedFormatViewMode) ? loadedFormatViewMode : DEFAULT_SETTINGS.formatViewMode,
       statusBarEnabled: typeof loadedStatusBarEnabled === "boolean"
         ? loadedStatusBarEnabled
@@ -164,6 +173,7 @@ export const createSettingsStore = () => {
       setFontStyle,
       setFontWeight,
       setTextWrapEnabled,
+      setActiveLineHighlightEnabled,
       setFormatViewMode,
       setStatusBarEnabled,
       setSpellCheckEnabled,
