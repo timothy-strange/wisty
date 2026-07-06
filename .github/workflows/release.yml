@@ -1,0 +1,87 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            librsvg2-dev \
+            libayatana-appindicator3-dev \
+            libclang-dev \
+            patchelf \
+            file \
+            build-essential
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Verify tag matches package version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "Tag v$TAG_VERSION does not match package.json version $PKG_VERSION" >&2
+            exit 1
+          fi
+
+      - name: Build release bundles and user tarball
+        env:
+          # linuxdeploy/appimagetool ship as AppImages themselves, which need
+          # FUSE to mount; GitHub's runners don't have it. This makes them
+          # extract-and-run instead, avoiding the FUSE dependency entirely.
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: npm run release:linux
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p artifacts
+          cp src-tauri/target/release/bundle/deb/*.deb artifacts/
+          cp src-tauri/target/release/bundle/rpm/*.rpm artifacts/
+          cp src-tauri/target/release/bundle/appimage/*.AppImage artifacts/
+          cp dist-user/*.tar.gz artifacts/
+
+      - name: Create GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true
+
+      - name: Upload artifacts (manual runs)
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: wisty-release-artifacts
+          path: artifacts/*
