@@ -4,7 +4,13 @@ import { search, searchKeymap } from "@codemirror/search";
 import { drawSelection, dropCursor, EditorView, keymap } from "@codemirror/view";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { AppSettings, FormatViewMode } from "../settings/settingsTypes";
-import { createFormatting, setFormatModeEffect } from "./formatting/formatExtension";
+import {
+  createFormatting,
+  setFormatModeEffect,
+  setHeadingLevel,
+  toggleBold,
+  toggleItalic
+} from "./formatting/formatExtension";
 import { createSearchPanelAdapter } from "./searchPanelAdapter";
 import { createSpellService } from "../spellcheck/spellService";
 import { createSpellcheckExtension, requestSpellRescan } from "../spellcheck/spellcheckExtension";
@@ -549,6 +555,24 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
   const getFormatMode = (): FormatViewMode =>
     editorView ? editorView.state.field(formatting.modeField) : options.getSettings().formatViewMode;
 
+  const toggleBoldFormat = () => {
+    if (editorView) {
+      toggleBold(editorView);
+    }
+  };
+
+  const toggleItalicFormat = () => {
+    if (editorView) {
+      toggleItalic(editorView);
+    }
+  };
+
+  const applyHeadingLevel = (level: number) => {
+    if (editorView) {
+      setHeadingLevel(editorView, level);
+    }
+  };
+
   const undoEdit = () => {
     if (!editorView) {
       return false;
@@ -583,6 +607,9 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
     configureSpellcheck,
     setFormatMode,
     getFormatMode,
+    toggleBold: toggleBoldFormat,
+    toggleItalic: toggleItalicFormat,
+    applyHeadingLevel,
     applySettings,
     openOrFocusFindPanel,
     openOrFocusReplacePanel,

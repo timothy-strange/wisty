@@ -412,6 +412,10 @@ function App() {
   });
 
   createEffect(() => {
+    editorAdapter.setFormatMode(settingsStore.state.formatViewMode);
+  });
+
+  createEffect(() => {
     void editorAdapter.configureSpellcheck({
       enabled: settingsStore.state.spellCheckEnabled,
       language: settingsStore.state.spellCheckLanguage

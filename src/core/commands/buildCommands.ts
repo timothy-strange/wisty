@@ -38,6 +38,10 @@ type BuildCommandsDeps = {
     openOrFocusFindPanel: () => boolean;
     openOrFocusReplacePanel: () => boolean;
     setFormatMode: (mode: FormatViewMode) => void;
+    getFormatMode: () => FormatViewMode;
+    toggleBold: () => void;
+    toggleItalic: () => void;
+    applyHeadingLevel: (level: number) => void;
   };
   settings: {
     state: {
@@ -205,6 +209,34 @@ export const buildCommands = (deps: BuildCommandsDeps): { definitions: CommandDe
       }
     },
     {
+      id: "format.bold",
+      label: "Bold",
+      shortcut: commandShortcut(deps.platform.isMac, "B"),
+      refocusEditorOnMenuSelect: true,
+      run: () => deps.editor.toggleBold()
+    },
+    {
+      id: "format.italic",
+      label: "Italic",
+      shortcut: commandShortcut(deps.platform.isMac, "I"),
+      refocusEditorOnMenuSelect: true,
+      run: () => deps.editor.toggleItalic()
+    },
+    ...([1, 2, 3, 4, 5, 6] as const).map((level): CommandDefinition => ({
+      id: `format.heading.${level}`,
+      label: `Heading ${level}`,
+      shortcut: `${deps.platform.isMac ? "Cmd" : "Ctrl"}+Alt+${level}`,
+      refocusEditorOnMenuSelect: true,
+      run: () => deps.editor.applyHeadingLevel(level)
+    })),
+    {
+      id: "format.heading.normal",
+      label: "Normal Text",
+      shortcut: `${deps.platform.isMac ? "Cmd" : "Ctrl"}+Alt+0`,
+      refocusEditorOnMenuSelect: true,
+      run: () => deps.editor.applyHeadingLevel(0)
+    },
+    {
       id: "view.theme.light",
       label: "Light Theme",
       refocusEditorOnMenuSelect: true,
@@ -233,7 +265,7 @@ export const buildCommands = (deps: BuildCommandsDeps): { definitions: CommandDe
       shortcut: "Alt+M",
       refocusEditorOnMenuSelect: true,
       run: () =>
-        deps.editor.setFormatMode(deps.settings.state.formatViewMode === "formatted" ? "plain" : "formatted"),
+        deps.editor.setFormatMode(deps.editor.getFormatMode() === "formatted" ? "plain" : "formatted"),
       checked: () => deps.settings.state.formatViewMode === "formatted"
     },
     {
@@ -309,6 +341,30 @@ export const buildCommands = (deps: BuildCommandsDeps): { definitions: CommandDe
         { type: "command", commandId: "edit.paste" },
         { type: "separator" },
         { type: "command", commandId: "edit.find" }
+      ]
+    },
+    {
+      id: "format",
+      label: "Format",
+      items: [
+        { type: "command", commandId: "format.bold" },
+        { type: "command", commandId: "format.italic" },
+        { type: "separator" },
+        {
+          type: "submenu",
+          id: "format.heading",
+          label: "Heading",
+          items: (): MenuItem[] => [
+            { type: "command", commandId: "format.heading.1" },
+            { type: "command", commandId: "format.heading.2" },
+            { type: "command", commandId: "format.heading.3" },
+            { type: "command", commandId: "format.heading.4" },
+            { type: "command", commandId: "format.heading.5" },
+            { type: "command", commandId: "format.heading.6" },
+            { type: "separator" },
+            { type: "command", commandId: "format.heading.normal" }
+          ]
+        }
       ]
     },
     {
