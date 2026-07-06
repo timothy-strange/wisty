@@ -118,14 +118,29 @@ body {
   background: var(--menu-popover);
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.14);
   z-index: 40;
-  max-height: var(--kb-popper-content-available-height, 72vh);
-  overflow-y: auto;
   width: max-content;
 }
 
 .menu-popover:focus,
 .menu-popover:focus-visible {
   outline: none;
+}
+
+.menu-scroll-area {
+  max-height: var(--kb-popper-content-available-height, 72vh);
+  overflow-y: auto;
+}
+
+.menu-scroll-more {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  padding: 3px 0 4px 20px;
+  pointer-events: none;
+  background: var(--menu-popover);
+  color: var(--status-text);
+  font-size: 12px;
+  font-style: italic;
 }
 
 .menu-item {

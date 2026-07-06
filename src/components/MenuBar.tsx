@@ -1,4 +1,4 @@
-import { For, JSX, Show } from "solid-js";
+import { For, JSX, Show, createSignal, onCleanup } from "solid-js";
 import {
   Root as MenubarRoot,
   Menu as MenubarMenu,
@@ -13,6 +13,40 @@ import {
 } from "@kobalte/core/menubar";
 import { useCommandsContext, useMenuContext } from "../core/app/appContexts";
 import { CommandDefinition, MenuItem } from "../core/commands/commandRegistry";
+
+/** Tracks whether a scrollable element has content hidden below its visible edge. */
+const createScrollOverflow = () => {
+  const [hasMore, setHasMore] = createSignal(false);
+
+  const attach = (el: HTMLElement) => {
+    const update = () => setHasMore(el.scrollHeight - el.scrollTop - el.clientHeight > 1);
+    update();
+    el.addEventListener("scroll", update);
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    onCleanup(() => {
+      el.removeEventListener("scroll", update);
+      observer.disconnect();
+    });
+  };
+
+  return { hasMore, attach };
+};
+
+/** Wraps menu items in a scrollable area with a "More…" hint when items overflow it. */
+const ScrollArea = (props: { children: JSX.Element }) => {
+  const overflow = createScrollOverflow();
+  return (
+    <>
+      <div class="menu-scroll-area" ref={(el) => overflow.attach(el)}>
+        {props.children}
+      </div>
+      <Show when={overflow.hasMore()}>
+        <div class="menu-scroll-more" aria-hidden="true">More…</div>
+      </Show>
+    </>
+  );
+};
 
 const commandLabel = (definition: CommandDefinition) => {
   const label = definition.getLabel ? definition.getLabel() : definition.label;
@@ -43,7 +77,9 @@ export const MenuBar = () => {
           </MenubarSubTrigger>
           <MenubarPortal>
             <MenubarSubContent class="menu-popover">
-              <For each={item.items()}>{(child) => renderItem(child)}</For>
+              <ScrollArea>
+                <For each={item.items()}>{(child) => renderItem(child)}</For>
+              </ScrollArea>
             </MenubarSubContent>
           </MenubarPortal>
         </MenubarSub>
@@ -125,9 +161,11 @@ export const MenuBar = () => {
                   closeReason = "none";
                 }}
               >
-                <For each={section.items}>
-                  {(item) => renderItem(item)}
-                </For>
+                <ScrollArea>
+                  <For each={section.items}>
+                    {(item) => renderItem(item)}
+                  </For>
+                </ScrollArea>
               </MenubarContent>
             </MenubarPortal>
           </MenubarMenu>
