@@ -884,7 +884,9 @@ pub fn run() {
             spellcheck::spell_check_words,
             spellcheck::spell_suggest,
             spellcheck::spell_add_word,
-            spellcheck::spell_ignore_word
+            spellcheck::spell_ignore_word,
+            spellcheck::spell_list_added_words,
+            spellcheck::spell_remove_word
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -42,6 +42,10 @@ struct PersonalDictionary {
 pub struct SpellState {
     dictionary: Mutex<Option<LoadedDictionary>>,
     personal: Mutex<PersonalDictionary>,
+    /// Words ignored for this session only. Kept separately from `personal`
+    /// (which is persisted) so reloading the dictionary can still restore
+    /// them; a fresh `Hunspell` instance otherwise has no memory of them.
+    ignored: Mutex<Vec<String>>,
 }
 
 /// Maps a dictionary code (e.g. `en_US`) to a human-readable label.
@@ -147,11 +151,11 @@ fn read_personal_words(path: &Path) -> Vec<String> {
     }
 }
 
-/// Ensures the personal word list is loaded from disk, returning a clone of it.
+/// Ensures the personal word list is loaded from disk.
 fn ensure_personal_loaded(
     state: &tauri::State<'_, SpellState>,
     app: &tauri::AppHandle,
-) -> Result<Vec<String>, String> {
+) -> Result<(), String> {
     let mut personal = state
         .personal
         .lock()
@@ -163,7 +167,16 @@ fn ensure_personal_loaded(
         personal.path = Some(path);
     }
 
-    Ok(personal.words.clone())
+    Ok(())
+}
+
+/// Writes the personal dictionary's current words to disk.
+fn save_personal_words(personal: &PersonalDictionary) -> Result<(), String> {
+    let Some(path) = personal.path.as_ref() else {
+        return Ok(());
+    };
+    let contents = format!("{}\n", personal.words.join("\n"));
+    fs::write(path, contents).map_err(|error| format!("Unable to save personal dictionary: {error}"))
 }
 
 #[cfg(test)]
@@ -204,7 +217,23 @@ pub fn spell_load_dictionary(
 
     let mut hunspell = Hunspell::new(&aff.to_string_lossy(), &dic.to_string_lossy());
 
-    for word in ensure_personal_loaded(&state, &app)? {
+    ensure_personal_loaded(&state, &app)?;
+    let personal_words = state
+        .personal
+        .lock()
+        .map_err(|error| format!("Spell state poisoned: {error}"))?
+        .words
+        .clone();
+    for word in personal_words {
+        hunspell.add(&word);
+    }
+
+    let ignored_words = state
+        .ignored
+        .lock()
+        .map_err(|error| format!("Spell state poisoned: {error}"))?
+        .clone();
+    for word in ignored_words {
         hunspell.add(&word);
     }
 
@@ -289,28 +318,71 @@ pub fn spell_add_word(
         return Ok(());
     }
     personal.words.push(word);
+    save_personal_words(&personal)
+}
 
-    if let Some(path) = personal.path.clone() {
-        let contents = format!("{}\n", personal.words.join("\n"));
-        fs::write(&path, contents)
-            .map_err(|error| format!("Unable to save personal dictionary: {error}"))?;
-    }
+/// Returns the personal dictionary's words, sorted for display.
+#[tauri::command]
+pub fn spell_list_added_words(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, SpellState>,
+) -> Result<Vec<String>, String> {
+    ensure_personal_loaded(&state, &app)?;
+    let mut words = state
+        .personal
+        .lock()
+        .map_err(|error| format!("Spell state poisoned: {error}"))?
+        .words
+        .clone();
+    words.sort_by_key(|word| word.to_lowercase());
+    Ok(words)
+}
 
-    Ok(())
+/// Removes a word from the personal dictionary. The active in-memory
+/// dictionary isn't touched here since libhunspell has no "unlearn" call;
+/// callers should reload the dictionary afterwards to pick up the change.
+#[tauri::command]
+pub fn spell_remove_word(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, SpellState>,
+    word: String,
+) -> Result<(), String> {
+    ensure_personal_loaded(&state, &app)?;
+
+    let mut personal = state
+        .personal
+        .lock()
+        .map_err(|error| format!("Spell state poisoned: {error}"))?;
+
+    personal.words.retain(|existing| existing != &word);
+    save_personal_words(&personal)
 }
 
 /// Adds a word to the active dictionary for this session only (not persisted).
+/// Recorded separately so a later dictionary reload (e.g. after removing a
+/// personal word) can restore it, since a fresh `Hunspell` instance has no
+/// memory of words added to the previous one.
 #[tauri::command]
 pub fn spell_ignore_word(
     state: tauri::State<'_, SpellState>,
     word: String,
 ) -> Result<(), String> {
-    let mut guard = state
-        .dictionary
+    {
+        let mut guard = state
+            .dictionary
+            .lock()
+            .map_err(|error| format!("Spell state poisoned: {error}"))?;
+        if let Some(dictionary) = guard.as_mut() {
+            dictionary.hunspell.add(&word);
+        }
+    }
+
+    let mut ignored = state
+        .ignored
         .lock()
         .map_err(|error| format!("Spell state poisoned: {error}"))?;
-    if let Some(dictionary) = guard.as_mut() {
-        dictionary.hunspell.add(&word);
+    if !ignored.iter().any(|existing| existing == &word) {
+        ignored.push(word);
     }
     Ok(())
 }

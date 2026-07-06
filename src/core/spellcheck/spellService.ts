@@ -55,6 +55,14 @@ export const createSpellService = () => {
     correctnessCache.set(word, true);
   };
 
+  const listAddedWords = (): Promise<string[]> =>
+    invoke<string[]>("spell_list_added_words");
+
+  const removeWord = async (word: string): Promise<void> => {
+    await invoke("spell_remove_word", { word });
+    correctnessCache.clear();
+  };
+
   const clearCache = () => correctnessCache.clear();
 
   return {
@@ -64,6 +72,8 @@ export const createSpellService = () => {
     suggest,
     addWord,
     ignoreWord,
+    listAddedWords,
+    removeWord,
     clearCache
   };
 };

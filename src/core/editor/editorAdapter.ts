@@ -51,6 +51,7 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
   const spellExtension = createSpellcheckExtension(spellService);
   let spellEnabled = false;
   let spellLoadedLanguage: string | undefined;
+  let spellDictionaryDirty = false;
 
   const wrapCompartment = new Compartment();
   const styleCompartment = new Compartment();
@@ -408,10 +409,30 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
 
   const listSpellDictionaries = () => spellService.listDictionaries();
 
+  const listAddedWords = () => spellService.listAddedWords();
+
+  const removeAddedWord = async (word: string) => {
+    await spellService.removeWord(word);
+    if (!spellLoadedLanguage) {
+      return;
+    }
+    if (spellEnabled) {
+      await spellService.loadDictionary(spellLoadedLanguage);
+      if (editorView) {
+        editorView.dispatch({ effects: requestSpellRescan.of(null) });
+      }
+    } else {
+      // Defer the reload until spellcheck is next enabled, since disabled
+      // spellcheck has no live dictionary to benefit from it right now.
+      spellDictionaryDirty = true;
+    }
+  };
+
   const configureSpellcheck = async ({ enabled, language }: { enabled: boolean; language: string }) => {
-    if (enabled && language && language !== spellLoadedLanguage) {
+    if (enabled && language && (language !== spellLoadedLanguage || spellDictionaryDirty)) {
       const loaded = await spellService.loadDictionary(language);
       spellLoadedLanguage = loaded ? language : undefined;
+      spellDictionaryDirty = false;
     }
 
     spellEnabled = enabled && spellLoadedLanguage !== undefined;
@@ -539,6 +560,8 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
     reset,
     setLargeLineSafeMode,
     listSpellDictionaries,
+    listAddedWords,
+    removeAddedWord,
     configureSpellcheck,
     applySettings,
     openOrFocusFindPanel,

@@ -60,18 +60,18 @@ export const AboutDialog = (props: AboutDialogProps) => {
           <div class="about-section">
             <div class="about-section-title">Many thanks to the developers of these libraries included in wisty.</div>
             <div class="about-section-note">Scroll for the full list</div>
-            <div class="about-list-shell">
-              <div class="about-list">
+            <div class="list-shell about-list-shell">
+              <div class="list about-list">
                 <For each={libraryCredits}>
                   {(library) => (
-                    <div class="about-list-row">
-                      <span class="about-list-name">{library.name}</span>
-                      <button class="about-open-link" onClick={() => void openInBrowser(library.url, props.onError)}>Open</button>
+                    <div class="list-row">
+                      <span class="list-name">{library.name}</span>
+                      <button class="list-action-link" onClick={() => void openInBrowser(library.url, props.onError)}>Open</button>
                     </div>
                   )}
                 </For>
               </div>
-              <div class="about-list-fade" />
+              <div class="list-fade" />
             </div>
           </div>
 

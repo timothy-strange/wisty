@@ -57,6 +57,7 @@ type BuildCommandsDeps = {
   spell: {
     dictionaries: Accessor<DictionaryInfo[]>;
     showInstallHelp: () => void;
+    showAddedWords: () => void;
   };
   showAbout: () => Promise<void>;
 };
@@ -249,6 +250,11 @@ export const buildCommands = (deps: BuildCommandsDeps): { definitions: CommandDe
       run: () => deps.spell.showInstallHelp()
     },
     {
+      id: "view.spellCheck.addedWords",
+      label: "Added Words...",
+      run: () => deps.spell.showAddedWords()
+    },
+    {
       id: "view.font.browser",
       label: "Font...",
       refocusEditorOnMenuSelect: true,
@@ -311,7 +317,8 @@ export const buildCommands = (deps: BuildCommandsDeps): { definitions: CommandDe
             if (dictionaries.length === 0) {
               return [
                 { type: "command", commandId: "view.spellCheck.none" },
-                { type: "command", commandId: "view.spellCheck.help" }
+                { type: "command", commandId: "view.spellCheck.help" },
+                { type: "command", commandId: "view.spellCheck.addedWords" }
               ];
             }
             return [
@@ -320,7 +327,9 @@ export const buildCommands = (deps: BuildCommandsDeps): { definitions: CommandDe
               ...dictionaries.map((dictionary): MenuItem => ({
                 type: "command",
                 commandId: spellLanguageCommandId(dictionary.code)
-              }))
+              })),
+              { type: "separator" },
+              { type: "command", commandId: "view.spellCheck.addedWords" }
             ];
           }
         },

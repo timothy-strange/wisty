@@ -71,6 +71,8 @@ function App() {
   const settingsStore = createSettingsStore();
   const menuState = useMenuState();
   const [aboutOpen, setAboutOpen] = createSignal(false);
+  const [addedWordsOpen, setAddedWordsOpen] = createSignal(false);
+  const [addedWords, setAddedWords] = createSignal<string[]>([]);
   const [appVersion, setAppVersion] = createSignal("2.0.1");
   const [largeFileDialog, setLargeFileDialog] = createSignal<LargeFileDialogState | null>(null);
   const [cursorLine, setCursorLine] = createSignal(1);
@@ -181,6 +183,41 @@ function App() {
     editorAdapter.focus();
   };
 
+  const openAddedWordsDialog = async () => {
+    try {
+      setAddedWords(await editorAdapter.listAddedWords());
+      setAddedWordsOpen(true);
+    } catch (error) {
+      const appError = toAppError(error, "UNKNOWN", "Unable to load added words");
+      errorModalQueue.enqueue({
+        title: "Unable to load added words",
+        message: appError.message,
+        code: appError.code,
+        details: appError.details
+      });
+    }
+  };
+
+  const closeAddedWordsDialog = () => {
+    setAddedWordsOpen(false);
+    editorAdapter.focus();
+  };
+
+  const removeAddedWord = async (word: string) => {
+    try {
+      await editorAdapter.removeAddedWord(word);
+      setAddedWords((current) => current.filter((existing) => existing !== word));
+    } catch (error) {
+      const appError = toAppError(error, "UNKNOWN", "Unable to remove word");
+      errorModalQueue.enqueue({
+        title: "Unable to remove word",
+        message: appError.message,
+        code: appError.code,
+        details: appError.details
+      });
+    }
+  };
+
   const dismissErrorModalAndRefocus = () => {
     const hadSingleEntry = errorModalQueue.entries().length <= 1;
     errorModalQueue.dismissCurrent();
@@ -239,7 +276,8 @@ function App() {
     settings: settingsStore,
     spell: {
       dictionaries: spellDictionaries,
-      showInstallHelp: showSpellInstallHelp
+      showInstallHelp: showSpellInstallHelp,
+      showAddedWords: () => void openAddedWordsDialog()
     },
     showAbout: openAboutDialog
   });
@@ -399,6 +437,12 @@ function App() {
           onAboutClose={closeAboutDialog}
           onAboutError={(payload) => {
             errorModalQueue.enqueue(payload);
+          }}
+          addedWordsDialog={{
+            open: addedWordsOpen(),
+            words: addedWords(),
+            onClose: closeAddedWordsDialog,
+            onRemove: (word) => void removeAddedWord(word)
           }}
           largeFileDialog={{
             open: largeFileDialog() !== null,

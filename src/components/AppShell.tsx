@@ -1,5 +1,6 @@
 import { Show } from "solid-js";
 import { AboutDialog } from "./AboutDialog";
+import { AddedWordsDialog } from "./AddedWordsDialog";
 import { ConfirmDiscardModal } from "./ConfirmDiscardModal";
 import { ErrorModal } from "./ErrorModal";
 import { FileLoadingModal } from "./FileLoadingModal";
@@ -23,6 +24,12 @@ type AppShellProps = {
     code?: string;
     details?: Record<string, unknown>;
   }) => void;
+  addedWordsDialog: {
+    open: boolean;
+    words: string[];
+    onClose: () => void;
+    onRemove: (word: string) => void;
+  };
   largeFileDialog: {
     open: boolean;
     kind: "confirm" | "blocked";
@@ -88,6 +95,13 @@ export const AppShell = (props: AppShellProps) => {
         version={props.appVersion}
         onClose={props.onAboutClose}
         onError={props.onAboutError}
+      />
+
+      <AddedWordsDialog
+        open={props.addedWordsDialog.open}
+        words={props.addedWordsDialog.words}
+        onClose={props.addedWordsDialog.onClose}
+        onRemove={props.addedWordsDialog.onRemove}
       />
 
       <LargeFileOpenModal
