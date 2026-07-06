@@ -2,6 +2,9 @@ export type ThemeMode = "light" | "dark";
 
 export type FontStyle = "normal" | "italic" | "oblique";
 
+/** Live rendering mode for Markdown-style formatting. */
+export type FormatViewMode = "formatted" | "plain";
+
 export const FONT_PRESETS = {
   sans: "Noto Sans, Liberation Sans, sans-serif",
   serif: "Noto Serif, Liberation Serif, serif",
@@ -15,6 +18,7 @@ export type AppSettings = {
   fontStyle: FontStyle;
   fontWeight: number;
   textWrapEnabled: boolean;
+  formatViewMode: FormatViewMode;
   statusBarEnabled: boolean;
   spellCheckEnabled: boolean;
   spellCheckLanguage: string;
@@ -29,6 +33,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   fontStyle: "normal",
   fontWeight: 400,
   textWrapEnabled: true,
+  formatViewMode: "plain",
   statusBarEnabled: true,
   spellCheckEnabled: false,
   spellCheckLanguage: "en_US",

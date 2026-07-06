@@ -90,6 +90,9 @@ function App() {
     onCursorPositionChanged: ({ currentLine, totalLines }) => {
       setCursorLine(currentLine);
       setTotalLines(totalLines);
+    },
+    onFormatModeChanged: (mode) => {
+      void settingsStore.actions.setFormatViewMode(mode);
     }
   });
 
@@ -493,7 +496,8 @@ function App() {
           statusBar={{
             enabled: settingsStore.state.statusBarEnabled,
             currentLine: cursorLine(),
-            totalLines: totalLines()
+            totalLines: totalLines(),
+            formatViewMode: settingsStore.state.formatViewMode
           }}
           errorModal={{
             open: errorModalQueue.open(),

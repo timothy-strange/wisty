@@ -3,7 +3,8 @@ import { defaultKeymap, history, indentWithTab, isolateHistory, redo, undo } fro
 import { search, searchKeymap } from "@codemirror/search";
 import { drawSelection, dropCursor, EditorView, keymap } from "@codemirror/view";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { AppSettings } from "../settings/settingsTypes";
+import { AppSettings, FormatViewMode } from "../settings/settingsTypes";
+import { createFormatting, setFormatModeEffect } from "./formatting/formatExtension";
 import { createSearchPanelAdapter } from "./searchPanelAdapter";
 import { createSpellService } from "../spellcheck/spellService";
 import { createSpellcheckExtension, requestSpellRescan } from "../spellcheck/spellcheckExtension";
@@ -20,6 +21,7 @@ type CursorPositionPayload = {
 type EditorAdapterOptions = {
   onDocChanged: (payload: DocChangedPayload) => void;
   onCursorPositionChanged: (payload: CursorPositionPayload) => void;
+  onFormatModeChanged: (mode: FormatViewMode) => void;
   getSettings: () => AppSettings;
 };
 
@@ -56,6 +58,8 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
   const wrapCompartment = new Compartment();
   const styleCompartment = new Compartment();
   const spellCompartment = new Compartment();
+
+  const formatting = createFormatting(() => options.getSettings().formatViewMode);
 
   const createStyleExtension = () => {
     const settings = options.getSettings();
@@ -231,9 +235,16 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
         wrapCompartment.of(!largeLineSafeModeEnabled && settings.textWrapEnabled ? EditorView.lineWrapping : []),
         spellCompartment.of(spellEnabled ? spellExtension : []),
         styleCompartment.of(createStyleExtension()),
+        formatting.extension,
         EditorView.updateListener.of((update) => {
           if (update.docChanged || update.selectionSet) {
             emitCursorPositionIfChanged(update.state);
+          }
+
+          const previousMode = update.startState.field(formatting.modeField);
+          const nextMode = update.state.field(formatting.modeField);
+          if (previousMode !== nextMode) {
+            options.onFormatModeChanged(nextMode);
           }
 
           if (!update.docChanged) {
@@ -531,6 +542,13 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
     return true;
   };
 
+  const setFormatMode = (mode: FormatViewMode) => {
+    editorView?.dispatch({ effects: setFormatModeEffect.of(mode) });
+  };
+
+  const getFormatMode = (): FormatViewMode =>
+    editorView ? editorView.state.field(formatting.modeField) : options.getSettings().formatViewMode;
+
   const undoEdit = () => {
     if (!editorView) {
       return false;
@@ -563,6 +581,8 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
     listAddedWords,
     removeAddedWord,
     configureSpellcheck,
+    setFormatMode,
+    getFormatMode,
     applySettings,
     openOrFocusFindPanel,
     openOrFocusReplacePanel,

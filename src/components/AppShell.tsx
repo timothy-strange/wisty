@@ -59,6 +59,7 @@ type AppShellProps = {
     enabled: boolean;
     currentLine: number;
     totalLines: number;
+    formatViewMode: "formatted" | "plain";
   };
   errorModal: {
     open: boolean;
@@ -81,7 +82,12 @@ export const AppShell = (props: AppShellProps) => {
       </Show>
 
       <Show when={props.statusBar.enabled}>
-        <div class="status-bar">Line {props.statusBar.currentLine} of {props.statusBar.totalLines}</div>
+        <div class="status-bar">
+          <span>Line {props.statusBar.currentLine} of {props.statusBar.totalLines}</span>
+          <span class="status-bar-mode">
+            {props.statusBar.formatViewMode === "formatted" ? "Formatted view" : "Plain text view"}
+          </span>
+        </div>
       </Show>
 
       <ConfirmDiscardModal

@@ -1,7 +1,7 @@
 import { createStore } from "solid-js/store";
 import { createSignal } from "solid-js";
 import { Store } from "@tauri-apps/plugin-store";
-import { AppSettings, DEFAULT_SETTINGS, FontStyle, ThemeMode } from "./settingsTypes";
+import { AppSettings, DEFAULT_SETTINGS, FontStyle, FormatViewMode, ThemeMode } from "./settingsTypes";
 
 const SETTINGS_FILE = "settings.json";
 
@@ -10,6 +10,8 @@ const clamp = (value: number, min: number, max: number) => Math.min(max, Math.ma
 const isThemeMode = (value: unknown): value is ThemeMode => value === "light" || value === "dark";
 
 const isFontStyle = (value: unknown): value is FontStyle => value === "normal" || value === "italic" || value === "oblique";
+
+const isFormatViewMode = (value: unknown): value is FormatViewMode => value === "formatted" || value === "plain";
 
 type SettingKey = keyof AppSettings;
 
@@ -56,6 +58,11 @@ export const createSettingsStore = () => {
   const setTextWrapEnabled = async (enabled: boolean) => {
     setState({ textWrapEnabled: enabled });
     await saveSetting("textWrapEnabled", enabled);
+  };
+
+  const setFormatViewMode = async (formatViewMode: FormatViewMode) => {
+    setState({ formatViewMode });
+    await saveSetting("formatViewMode", formatViewMode);
   };
 
   const setStatusBarEnabled = async (enabled: boolean) => {
@@ -109,6 +116,7 @@ export const createSettingsStore = () => {
     const loadedFontStyle = await backingStore.get("fontStyle");
     const loadedFontWeight = await backingStore.get("fontWeight");
     const loadedTextWrapEnabled = await backingStore.get("textWrapEnabled");
+    const loadedFormatViewMode = await backingStore.get("formatViewMode");
     const loadedStatusBarEnabled = await backingStore.get("statusBarEnabled");
     const loadedSpellCheckEnabled = await backingStore.get("spellCheckEnabled");
     const loadedSpellCheckLanguage = await backingStore.get("spellCheckLanguage");
@@ -126,6 +134,7 @@ export const createSettingsStore = () => {
       fontStyle: isFontStyle(loadedFontStyle) ? loadedFontStyle : DEFAULT_SETTINGS.fontStyle,
       fontWeight: typeof loadedFontWeight === "number" ? clamp(loadedFontWeight, 100, 900) : DEFAULT_SETTINGS.fontWeight,
       textWrapEnabled: typeof loadedTextWrapEnabled === "boolean" ? loadedTextWrapEnabled : DEFAULT_SETTINGS.textWrapEnabled,
+      formatViewMode: isFormatViewMode(loadedFormatViewMode) ? loadedFormatViewMode : DEFAULT_SETTINGS.formatViewMode,
       statusBarEnabled: typeof loadedStatusBarEnabled === "boolean"
         ? loadedStatusBarEnabled
         : DEFAULT_SETTINGS.statusBarEnabled,
@@ -155,6 +164,7 @@ export const createSettingsStore = () => {
       setFontStyle,
       setFontWeight,
       setTextWrapEnabled,
+      setFormatViewMode,
       setStatusBarEnabled,
       setSpellCheckEnabled,
       setSpellCheckLanguage,

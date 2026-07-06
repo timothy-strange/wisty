@@ -1,5 +1,5 @@
 import type { Accessor } from "solid-js";
-import type { FontStyle } from "../settings/settingsTypes";
+import type { FontStyle, FormatViewMode } from "../settings/settingsTypes";
 
 export type AsyncAction = () => Promise<void>;
 
@@ -98,6 +98,8 @@ export type EditorPort = {
   append: (text: string, options?: AppendTextOptions) => void;
   reset: (options?: ResetEditorOptions) => void;
   setLargeLineSafeMode: (enabled: boolean) => void;
+  setFormatMode: (mode: FormatViewMode) => void;
+  getFormatMode: () => FormatViewMode;
   undoEdit: () => boolean;
   redoEdit: () => boolean;
   cutSelection: () => Promise<boolean>;
@@ -142,6 +144,7 @@ export type SettingsPort = {
     fontStyle: FontStyle;
     fontWeight: number;
     textWrapEnabled: boolean;
+    formatViewMode: FormatViewMode;
     statusBarEnabled: boolean;
     lastDirectory: string;
     recentFiles: string[];
@@ -155,6 +158,7 @@ export type SettingsPort = {
     setFontStyle: (fontStyle: FontStyle) => Promise<void>;
     setFontWeight: (fontWeight: number) => Promise<void>;
     setTextWrapEnabled: (enabled: boolean) => Promise<void>;
+    setFormatViewMode: (mode: FormatViewMode) => Promise<void>;
     setStatusBarEnabled: (enabled: boolean) => Promise<void>;
     setLastDirectory: (path: string) => Promise<void>;
     addRecentFile: (filePath: string) => Promise<void>;

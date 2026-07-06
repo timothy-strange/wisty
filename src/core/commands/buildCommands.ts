@@ -1,6 +1,7 @@
 import type { CommandDefinition, MenuItem, MenuSection } from "./commandRegistry";
 import type { Accessor } from "solid-js";
 import type { DictionaryInfo } from "../spellcheck/spellService";
+import type { FormatViewMode } from "../settings/settingsTypes";
 
 /** Stable command id for selecting a given spell-check dictionary. */
 export const spellLanguageCommandId = (code: string) => `view.spellCheck.lang.${code}`;
@@ -36,11 +37,13 @@ type BuildCommandsDeps = {
     pasteSelection: () => Promise<boolean>;
     openOrFocusFindPanel: () => boolean;
     openOrFocusReplacePanel: () => boolean;
+    setFormatMode: (mode: FormatViewMode) => void;
   };
   settings: {
     state: {
       themeMode: "light" | "dark";
       textWrapEnabled: boolean;
+      formatViewMode: FormatViewMode;
       statusBarEnabled: boolean;
       spellCheckEnabled: boolean;
       spellCheckLanguage: string;
@@ -225,6 +228,15 @@ export const buildCommands = (deps: BuildCommandsDeps): { definitions: CommandDe
       checked: () => !deps.fileLifecycle.safeModeActive() && deps.settings.state.textWrapEnabled
     },
     {
+      id: "view.formatMode",
+      label: "Formatted View",
+      shortcut: "Alt+M",
+      refocusEditorOnMenuSelect: true,
+      run: () =>
+        deps.editor.setFormatMode(deps.settings.state.formatViewMode === "formatted" ? "plain" : "formatted"),
+      checked: () => deps.settings.state.formatViewMode === "formatted"
+    },
+    {
       id: "view.statusBar",
       label: "Status Bar",
       refocusEditorOnMenuSelect: true,
@@ -307,6 +319,7 @@ export const buildCommands = (deps: BuildCommandsDeps): { definitions: CommandDe
         { type: "command", commandId: "view.theme.dark" },
         { type: "separator" },
         { type: "command", commandId: "view.wrap" },
+        { type: "command", commandId: "view.formatMode" },
         { type: "command", commandId: "view.statusBar" },
         {
           type: "submenu",

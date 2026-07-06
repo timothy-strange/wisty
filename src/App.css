@@ -662,6 +662,10 @@ body {
   background: var(--menu-bar-bg);
 }
 
+.status-bar-mode {
+  margin-left: auto;
+}
+
 .menu-submenu-arrow {
   font-size: 16px;
   line-height: 1;
