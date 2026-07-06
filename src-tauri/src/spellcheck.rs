@@ -101,7 +101,7 @@ fn discover_dictionaries() -> Vec<DictionaryInfo> {
                 Some(stem) => stem.to_string(),
                 None => continue,
             };
-            if path.with_extension("aff").exists() == false || seen_codes.contains(&code) {
+            if !path.with_extension("aff").exists() || seen_codes.contains(&code) {
                 continue;
             }
             seen_codes.push(code.clone());

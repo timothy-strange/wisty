@@ -7,6 +7,12 @@ export type CommandDefinition = {
   enabled?: () => boolean;
   checked?: () => boolean;
   refocusEditorOnMenuSelect?: boolean;
+  /**
+   * The command edits the editor document or clipboard, so its shortcut must
+   * yield to native handling while a text input outside the editor (e.g. the
+   * search panel) has focus.
+   */
+  skipWhenTextInputFocused?: boolean;
 };
 
 export type MenuItem = {
@@ -34,6 +40,7 @@ export type MenuSection = {
 export type CommandRegistry = {
   definitions: CommandDefinition[];
   get: (id: string) => CommandDefinition | undefined;
+  canExecute: (id: string) => boolean;
   execute: (id: string) => Promise<boolean>;
   register: (definition: CommandDefinition) => void;
 };
@@ -48,12 +55,20 @@ export const createCommandRegistry = (definitions: CommandDefinition[]): Command
     commandMap.set(definition.id, definition);
   };
 
-  const execute = async (id: string) => {
+  const canExecute = (id: string) => {
     const command = get(id);
     if (!command) {
       return false;
     }
-    if (command.enabled && !command.enabled()) {
+    return command.enabled ? command.enabled() : true;
+  };
+
+  const execute = async (id: string) => {
+    if (!canExecute(id)) {
+      return false;
+    }
+    const command = get(id);
+    if (!command) {
       return false;
     }
     await command.run();
@@ -63,6 +78,7 @@ export const createCommandRegistry = (definitions: CommandDefinition[]): Command
   return {
     definitions,
     get,
+    canExecute,
     execute,
     register
   };

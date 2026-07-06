@@ -143,6 +143,7 @@ export const buildCommands = (deps: BuildCommandsDeps): { definitions: CommandDe
       label: "Undo",
       shortcut: commandShortcut(deps.platform.isMac, "Z"),
       refocusEditorOnMenuSelect: true,
+      skipWhenTextInputFocused: true,
       run: () => {
         deps.editor.undoEdit();
       }
@@ -152,6 +153,7 @@ export const buildCommands = (deps: BuildCommandsDeps): { definitions: CommandDe
       label: "Redo",
       shortcut: deps.platform.isMac ? commandShortcut(true, "Z", true) : commandShortcut(false, "Y"),
       refocusEditorOnMenuSelect: true,
+      skipWhenTextInputFocused: true,
       run: () => {
         deps.editor.redoEdit();
       }
@@ -162,6 +164,7 @@ export const buildCommands = (deps: BuildCommandsDeps): { definitions: CommandDe
         label: "Redo",
         shortcut: commandShortcut(false, "Z", true),
         refocusEditorOnMenuSelect: true,
+        skipWhenTextInputFocused: true,
         run: () => {
           deps.editor.redoEdit();
         }
@@ -172,6 +175,7 @@ export const buildCommands = (deps: BuildCommandsDeps): { definitions: CommandDe
       label: "Cut",
       shortcut: commandShortcut(deps.platform.isMac, "X"),
       refocusEditorOnMenuSelect: true,
+      skipWhenTextInputFocused: true,
       run: async () => {
         await deps.editor.cutSelection();
       }
@@ -181,6 +185,7 @@ export const buildCommands = (deps: BuildCommandsDeps): { definitions: CommandDe
       label: "Copy",
       shortcut: commandShortcut(deps.platform.isMac, "C"),
       refocusEditorOnMenuSelect: true,
+      skipWhenTextInputFocused: true,
       run: async () => {
         await deps.editor.copySelection();
       }
@@ -190,6 +195,7 @@ export const buildCommands = (deps: BuildCommandsDeps): { definitions: CommandDe
       label: "Paste",
       shortcut: commandShortcut(deps.platform.isMac, "V"),
       refocusEditorOnMenuSelect: true,
+      skipWhenTextInputFocused: true,
       run: async () => {
         await deps.editor.pasteSelection();
       }
@@ -350,7 +356,8 @@ export const buildCommands = (deps: BuildCommandsDeps): { definitions: CommandDe
         { type: "command", commandId: "edit.copy" },
         { type: "command", commandId: "edit.paste" },
         { type: "separator" },
-        { type: "command", commandId: "edit.find" }
+        { type: "command", commandId: "edit.find" },
+        { type: "command", commandId: "edit.find.altReplaceKey" }
       ]
     },
     {

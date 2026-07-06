@@ -3,6 +3,7 @@ import { createSignal } from "solid-js";
 const MENU_ID_BY_MNEMONIC: Record<string, string> = {
   f: "file",
   e: "edit",
+  o: "format",
   v: "view",
   h: "help"
 };

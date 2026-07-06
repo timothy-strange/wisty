@@ -8,6 +8,8 @@ type UseGlobalKeyRoutingOptions = {
   errorModalOpen: Accessor<boolean>;
   dismissErrorModal: () => void;
   aboutOpen: Accessor<boolean>;
+  addedWordsOpen: Accessor<boolean>;
+  largeFileDialogOpen: Accessor<boolean>;
   confirmDiscardOpen: Accessor<boolean>;
   resolveConfirmDiscard: (shouldDiscard: boolean) => Promise<void>;
   menuPanelOpen: Accessor<boolean>;
@@ -49,7 +51,9 @@ export const useGlobalKeyRouting = (options: UseGlobalKeyRoutingOptions) => {
       return;
     }
 
-    if (options.aboutOpen()) {
+    // Dialogs handle their own keys (Escape via the dialog library); keep
+    // application shortcuts from acting behind them.
+    if (options.aboutOpen() || options.addedWordsOpen() || options.largeFileDialogOpen()) {
       return;
     }
 

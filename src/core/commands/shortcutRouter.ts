@@ -6,11 +6,31 @@ type ShortcutBinding = {
   requiresShift: boolean;
   requiresMod: boolean;
   requiresAlt: boolean;
+  skipWhenTextInputFocused: boolean;
 };
 
 type ShortcutRouterDeps = {
   definitions: CommandDefinition[];
   execute: (commandId: string) => Promise<boolean>;
+  canExecute?: (commandId: string) => boolean;
+};
+
+/**
+ * True when the key event originates from a text field outside the editor
+ * document (e.g. the find/replace panel inputs), where native clipboard and
+ * undo handling must win over the editor-wide commands.
+ */
+const isTextInputOutsideEditor = (event: KeyboardEvent): boolean => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  if (target.closest(".cm-content")) {
+    return false;
+  }
+  return target instanceof HTMLInputElement
+    || target instanceof HTMLTextAreaElement
+    || target.isContentEditable;
 };
 
 const parseShortcut = (commandId: string, shortcut: string): ShortcutBinding | null => {
@@ -38,7 +58,8 @@ const parseShortcut = (commandId: string, shortcut: string): ShortcutBinding | n
     key,
     requiresShift,
     requiresMod,
-    requiresAlt
+    requiresAlt,
+    skipWhenTextInputFocused: false
   };
 };
 
@@ -83,6 +104,7 @@ export const createShortcutRouter = (deps: ShortcutRouterDeps) => {
     }
 
     seenShortcuts.add(dedupeKey);
+    parsed.skipWhenTextInputFocused = Boolean(definition.skipWhenTextInputFocused);
     bindings.push(parsed);
   }
 
@@ -90,6 +112,12 @@ export const createShortcutRouter = (deps: ShortcutRouterDeps) => {
     for (const binding of bindings) {
       if (!matchesShortcut(event, binding)) {
         continue;
+      }
+      if (binding.skipWhenTextInputFocused && isTextInputOutsideEditor(event)) {
+        return false;
+      }
+      if (deps.canExecute && !deps.canExecute(binding.commandId)) {
+        return false;
       }
       event.preventDefault();
       void deps.execute(binding.commandId);

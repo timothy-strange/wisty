@@ -156,6 +156,31 @@ fn parse_positional_launch_args() -> Result<Option<String>, String> {
     Ok(positional.into_iter().next())
 }
 
+/// Decodes `%XX` escapes in a `file://` URI path (e.g. `%20` for a space).
+fn percent_decode(input: &str) -> Result<String, String> {
+    let bytes = input.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+
+    while index < bytes.len() {
+        if bytes[index] == b'%' {
+            let hex = bytes
+                .get(index + 1..index + 3)
+                .and_then(|pair| std::str::from_utf8(pair).ok())
+                .and_then(|pair| u8::from_str_radix(pair, 16).ok())
+                .ok_or_else(|| "Invalid percent-encoding in file:// path argument".to_string())?;
+            decoded.push(hex);
+            index += 3;
+        } else {
+            decoded.push(bytes[index]);
+            index += 1;
+        }
+    }
+
+    String::from_utf8(decoded)
+        .map_err(|_| "file:// path argument is not valid UTF-8 after decoding".to_string())
+}
+
 fn normalize_cli_path(raw: &str) -> Result<PathBuf, String> {
     if raw.trim().is_empty() {
         return Err("Empty file path argument".to_string());
@@ -166,14 +191,15 @@ fn normalize_cli_path(raw: &str) -> Result<PathBuf, String> {
         if uri_path.is_empty() {
             return Err("Invalid file:// path argument".to_string());
         }
+        let decoded = percent_decode(uri_path)?;
         #[cfg(windows)]
         {
-            let normalized = uri_path.strip_prefix('/').unwrap_or(uri_path);
+            let normalized = decoded.strip_prefix('/').unwrap_or(&decoded);
             PathBuf::from(normalized)
         }
         #[cfg(not(windows))]
         {
-            PathBuf::from(uri_path)
+            PathBuf::from(decoded)
         }
     } else {
         PathBuf::from(raw)
@@ -435,7 +461,7 @@ fn choose_editor_font(
         })
         .map_err(|error| error.to_string())?;
 
-        return rx.recv().map_err(|error| error.to_string());
+        rx.recv().map_err(|error| error.to_string())
     }
 
     #[cfg(not(target_os = "linux"))]
@@ -649,10 +675,19 @@ fn build_save_temp_path(target_path: &Path, stream_id: &str) -> Result<PathBuf, 
         )
     })?;
 
+    // Include the process id and a timestamp so the name can't collide with a
+    // temp file left behind by a crashed earlier session (stream ids restart
+    // at 1 on every launch, and creation uses create_new).
+    let unique_suffix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_nanos())
+        .unwrap_or(0);
     let temp_name = format!(
-        ".{}.wisty-save-{}.tmp",
+        ".{}.wisty-save-{}-{}-{}.tmp",
         file_name.to_string_lossy(),
-        stream_id
+        std::process::id(),
+        stream_id,
+        unique_suffix
     );
     Ok(parent.join(temp_name))
 }
@@ -780,21 +815,33 @@ fn finish_save_file_stream(
             .ok_or_else(|| format!("Save stream '{}' not found", stream_id))?
     };
 
-    stream.writer.flush().map_err(|error| {
-        format!(
+    if let Err(error) = stream.writer.flush() {
+        let _ = std::fs::remove_file(&stream.temp_path);
+        return Err(format!(
             "Unable to flush save stream for '{}': {error}",
             stream.target_path.to_string_lossy()
-        )
-    })?;
+        ));
+    }
+
+    // Sync before the rename so a crash or power loss right after saving
+    // cannot leave the target pointing at unwritten data.
+    if let Err(error) = stream.writer.get_ref().sync_all() {
+        let _ = std::fs::remove_file(&stream.temp_path);
+        return Err(format!(
+            "Unable to sync save stream for '{}': {error}",
+            stream.target_path.to_string_lossy()
+        ));
+    }
 
     drop(stream.writer);
 
-    std::fs::rename(&stream.temp_path, &stream.target_path).map_err(|error| {
-        format!(
+    if let Err(error) = std::fs::rename(&stream.temp_path, &stream.target_path) {
+        let _ = std::fs::remove_file(&stream.temp_path);
+        return Err(format!(
             "Unable to finalize save for '{}': {error}",
             stream.target_path.to_string_lossy()
-        )
-    })?;
+        ));
+    }
 
     Ok(SaveFileStreamFinishResult {
         bytes_written_total: stream.bytes_written_total,

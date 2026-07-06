@@ -306,7 +306,11 @@ function App() {
   const isInteractionBlocked = () =>
     fileLifecycle.loadingState.isLoading()
     || fileLifecycle.savingState.isSaving()
-    || errorModalQueue.open();
+    || errorModalQueue.open()
+    || aboutOpen()
+    || addedWordsOpen()
+    || largeFileDialog() !== null
+    || closeFlow.confirmDiscardOpen();
 
   const { handleMenuCommandSelected, handleMenuPanelOpenChange } = useMenuCommandPipeline({
     menuPanelOpen: menuState.menuPanelOpen,
@@ -319,6 +323,7 @@ function App() {
 
   const shortcutRouter = createShortcutRouter({
     definitions,
+    canExecute: (commandId) => !isInteractionBlocked() && commandRegistry.canExecute(commandId),
     execute: (commandId) => {
       if (isInteractionBlocked()) {
         return Promise.resolve(false);
@@ -335,6 +340,8 @@ function App() {
     errorModalOpen: errorModalQueue.open,
     dismissErrorModal: dismissErrorModalAndRefocus,
     aboutOpen,
+    addedWordsOpen,
+    largeFileDialogOpen: () => largeFileDialog() !== null,
     confirmDiscardOpen: closeFlow.confirmDiscardOpen,
     resolveConfirmDiscard: closeFlow.resolveConfirmDiscard,
     menuPanelOpen: menuState.menuPanelOpen,

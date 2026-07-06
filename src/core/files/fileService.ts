@@ -26,7 +26,13 @@ const normalizeDialogPath = (value: string | string[] | null): string | null => 
 const directoryFromPath = (filePath: string): string => {
   const normalized = filePath.replace(/\\/g, "/");
   const lastSlash = normalized.lastIndexOf("/");
-  return lastSlash <= 0 ? "" : normalized.slice(0, lastSlash);
+  if (lastSlash < 0) {
+    return "";
+  }
+  if (lastSlash === 0) {
+    return "/";
+  }
+  return normalized.slice(0, lastSlash);
 };
 
 const DEFAULT_STREAM_CHUNK_BYTES = 256 * 1024;
@@ -109,7 +115,11 @@ export const streamReadTextFileAtPath = async function* (
   const fileSizeBytes = fileInfo.size;
   const chunkSizeBytes = normalizeChunkSizeBytes(options?.chunkSizeBytes);
   const buffer = new Uint8Array(chunkSizeBytes);
-  const decoder = new TextDecoder();
+  // Fatal mode refuses non-UTF-8 input instead of silently substituting
+  // replacement characters, which would corrupt the file on the next save.
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  const invalidUtf8Error = () =>
+    new Error(`File is not valid UTF-8 text: '${filePath}'`);
 
   const handle = await openFile(filePath, { read: true });
   let bytesReadTotal = 0;
@@ -122,9 +132,11 @@ export const streamReadTextFileAtPath = async function* (
       }
 
       bytesReadTotal += readCount;
-      const text = decoder.decode(buffer.subarray(0, readCount), { stream: true });
-      if (typeof text !== "string") {
-        throw new Error(`Decoder produced non-string chunk for '${filePath}'`);
+      let text: string;
+      try {
+        text = decoder.decode(buffer.subarray(0, readCount), { stream: true });
+      } catch {
+        throw invalidUtf8Error();
       }
       if (text) {
         yield {
@@ -135,9 +147,11 @@ export const streamReadTextFileAtPath = async function* (
       }
     }
 
-    const trailingText = decoder.decode();
-    if (typeof trailingText !== "string") {
-      throw new Error(`Decoder produced non-string trailing chunk for '${filePath}'`);
+    let trailingText: string;
+    try {
+      trailingText = decoder.decode();
+    } catch {
+      throw invalidUtf8Error();
     }
     if (trailingText) {
       yield {

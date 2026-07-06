@@ -37,7 +37,7 @@ export const useAppLifecycle = (options: UseAppLifecycleOptions) => {
 
     window.addEventListener("keydown", options.handleGlobalKeydown);
 
-    void options
+    const settingsLoaded = options
       .loadSettings()
       .then(() => {
         options.editor.applySettings();
@@ -55,8 +55,11 @@ export const useAppLifecycle = (options: UseAppLifecycleOptions) => {
         // keep fallback version
       });
 
-    void options
-      .takeLaunchFileArg()
+    // Open the launch file only after settings have loaded: opening updates
+    // recent files and the last directory, and those writes are dropped (and
+    // then clobbered) if the settings store isn't ready yet.
+    void settingsLoaded
+      .then(() => options.takeLaunchFileArg())
       .then(async (launchFile) => {
         if (!launchFile) {
           return;
