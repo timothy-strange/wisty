@@ -7,14 +7,12 @@ Wisty was originally a fork of [Parchment](https://github.com/tywil04/parchment)
 ![wisty light](images/wisty-light.png)
 ![wisty dark](images/wisty-dark.png)
 
-The main motivation for creating wisty was aesthetics. I wasn't happy with the visual style of any existing Linux graphical text editors. Gnome Text Editor looks reasonable but I don't like the unconventional menu layout and the cluttered look of the title bar. Also, I wanted a genuinely lightweight editor. I think there is room for at least one text editor which doesn't have extensive code parsing and highlighting features. Even if these features don't use a lot of resources, they still clutter the app and spoil the minimalist vibe which I like. I just want somewhere basic where I can quickly view text or temporarily paste things, which also looks really nice.
+The main motivation for creating wisty was aesthetics. I wasn't happy with the visual style of any existing Linux graphical text editors. Also, I wanted a simple, non-coding-oriented text editor. I think there is room for at least one editor which doesn't have code parsing and highlighting features. Wisty is just for basic text viewing/editing functions. It has a basic Formatted mode for displaying styled markdown and spell-checking options.
 
 ## Features
 
-- **Markdown-style formatting** — bold (`**text**`), italic (`*text*` / `_text_`) and ATX headings (`#` .. `######`) are recognised and can be shown either as raw markup ("Plain" view) or with the markers hidden and the content styled ("Formatted" view). Toggle between the two from the View menu or with Alt+M. The document itself is never touched — this is purely a rendering mode, so it stays byte-for-byte plain text on disk.
-- **Formatting shortcuts** — Ctrl/Cmd+B and Ctrl/Cmd+I toggle bold/italic on the current selection (or drop an empty marker pair at the cursor with nothing selected). Ctrl/Cmd+Alt+1 through 6 set a heading level on every line the selection touches; Ctrl/Cmd+Alt+0 clears it. Also available from the new Format menu.
-- **Current-line highlighting** — an optional, persisted View menu toggle that highlights the line the cursor is on.
-- Text wrapping, adjustable font (family/size/style/weight), light/dark theme, spell check with installable dictionaries, and a status bar showing cursor position and view mode.
+- **Markdown-style formatting** — bold (`**text**`), italic (`*text*` / `_text_`) and ATX headings (`#` .. `######`) are recognised and can be shown either as raw markup ("Plain" view) or with the markers hidden and the content styled ("Formatted" view).
+- Text wrapping, adjustable font, light/dark theme, spell check with installable dictionaries.
 
 ## Installation
 
