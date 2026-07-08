@@ -40,6 +40,41 @@ describe("formatting decorations", () => {
     view.destroy();
   });
 
+  it("styles bold text that spans a line break", () => {
+    const { view } = createView("**bold\nstill bold** after");
+    const boldText = Array.from(view.dom.querySelectorAll(".cm-fmt-bold"))
+      .map((el) => el.textContent)
+      .join("");
+    expect(boldText).toBe("boldstill bold");
+    expect(view.dom.textContent).toBe("boldstill bold after");
+    view.destroy();
+  });
+
+  it("styles bold and italic across blank lines", () => {
+    const { view } = createView("**one\n\ntwo** and *three\n\nfour*");
+    const textOf = (selector: string) =>
+      Array.from(view.dom.querySelectorAll(selector))
+        .map((el) => el.textContent)
+        .join("");
+    expect(textOf(".cm-fmt-bold")).toBe("onetwo");
+    expect(textOf(".cm-fmt-italic")).toBe("threefour");
+    view.destroy();
+  });
+
+  it("gives up on spans longer than the length cap", () => {
+    const { view } = createView(`**${"a".repeat(1001)}**`);
+    expect(view.dom.querySelector(".cm-fmt-bold")).toBeNull();
+    expect(view.dom.querySelector(".cm-fmt-italic")).toBeNull();
+    view.destroy();
+  });
+
+  it("does not read star bullet lines as emphasis (whitespace-flanking rule)", () => {
+    const { view } = createView("* first item\n* second item");
+    expect(view.dom.querySelector(".cm-fmt-italic")).toBeNull();
+    expect(view.dom.querySelector(".cm-fmt-bold")).toBeNull();
+    view.destroy();
+  });
+
   it("does not match empty emphasis runs like ****", () => {
     const { view } = createView("****");
     expect(view.dom.querySelector(".cm-fmt-bold")).toBeNull();
@@ -113,6 +148,34 @@ describe("toggleBold", () => {
     toggleBold(view);
     expect(view.state.doc.toString()).toBe("****");
     expect(view.state.selection.main.head).toBe(2);
+  });
+
+  it("wraps each selected line in its own marker pair, skipping blank lines", () => {
+    const { view } = createView("one\ntwo\n\nthree");
+    view.dispatch({ selection: EditorSelection.range(0, 14) });
+    toggleBold(view);
+    expect(view.state.doc.toString()).toBe("**one**\n**two**\n\n**three**");
+  });
+
+  it("unwraps every line when the whole selection is already bold", () => {
+    const { view } = createView("**one**\n**two**");
+    view.dispatch({ selection: EditorSelection.range(0, 15) });
+    toggleBold(view);
+    expect(view.state.doc.toString()).toBe("one\ntwo");
+  });
+
+  it("wraps only the unwrapped lines of a mixed selection", () => {
+    const { view } = createView("**one**\ntwo");
+    view.dispatch({ selection: EditorSelection.range(0, 11) });
+    toggleBold(view);
+    expect(view.state.doc.toString()).toBe("**one**\n**two**");
+  });
+
+  it("keeps surrounding whitespace outside the inserted markers", () => {
+    const { view } = createView("  padded  ");
+    view.dispatch({ selection: EditorSelection.range(0, 10) });
+    toggleBold(view);
+    expect(view.state.doc.toString()).toBe("  **padded**  ");
   });
 });
 

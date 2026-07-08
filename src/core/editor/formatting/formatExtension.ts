@@ -2,6 +2,7 @@ import {
   Annotation,
   ChangeSpec,
   EditorSelection,
+  EditorState,
   Extension,
   Range,
   StateEffect,
@@ -26,14 +27,36 @@ const formattingEdit = Annotation.define<boolean>();
 const HEADING_PATTERN = /^(#{1,6})[ \t]+/;
 
 /**
+ * Longest run of content characters an emphasis span may contain. The toggle
+ * commands always produce single-line spans, so this only matters for
+ * documents authored elsewhere; it bounds how far past the viewport the
+ * decorator must scan and keeps a stray unpaired delimiter from bleeding
+ * styling across the whole document.
+ */
+const EMPHASIS_MAX_LENGTH = 1000;
+
+/** Longest possible whole match: content plus a pair of 2-character `**` delimiters. */
+const MAX_MATCH_LENGTH = EMPHASIS_MAX_LENGTH + 4;
+
+/**
  * Inline emphasis, delimiters kept out of the captured content. Bold is tried
- * before italic so `**x**` is not read as two stray `*`. Content is one-or-more
+ * before italic so `**x**` is not read as two stray `*`. Content may cross
+ * line breaks — even blank lines — up to EMPHASIS_MAX_LENGTH characters, but
+ * may not start or end with whitespace (CommonMark's flanking rule), which
+ * keeps `* bullet` / `* lists` from reading as italic. Content is one-or-more
  * non-delimiter characters, so empty runs like `****` never match — which is
  * what keeps deleting the last letter of a word from leaving orphaned markers.
- * Underscore italic requires word boundaries so `snake_case` is left alone.
+ * Underscore italic additionally requires word boundaries so `snake_case` is
+ * left alone.
  */
-const INLINE_PATTERN =
-  /\*\*([^*\n]+?)\*\*|\*([^*\n]+?)\*|(?<![\p{L}\p{N}_])_([^_\n]+?)_(?![\p{L}\p{N}_])/gu;
+const INLINE_PATTERN = new RegExp(
+  [
+    String.raw`\*\*(?!\s)([^*]{1,${EMPHASIS_MAX_LENGTH}}?)(?<!\s)\*\*`,
+    String.raw`\*(?!\s)([^*]{1,${EMPHASIS_MAX_LENGTH}}?)(?<!\s)\*`,
+    String.raw`(?<![\p{L}\p{N}_])_(?!\s)([^_]{1,${EMPHASIS_MAX_LENGTH}}?)(?<!\s)_(?![\p{L}\p{N}_])`
+  ].join("|"),
+  "gu"
+);
 
 const boldMark = Decoration.mark({ class: "cm-fmt-bold" });
 const italicMark = Decoration.mark({ class: "cm-fmt-italic" });
@@ -74,17 +97,15 @@ const createModeField = (getInitialMode: () => FormatViewMode) =>
     }
   });
 
-const collectInline = (lineText: string, start: number, lineFrom: number, ranges: Range<Decoration>[]) => {
-  const scanFrom = lineFrom + start;
-  const slice = lineText.slice(start);
+const collectInline = (text: string, offset: number, ranges: Range<Decoration>[]) => {
   INLINE_PATTERN.lastIndex = 0;
-  for (let match = INLINE_PATTERN.exec(slice); match; match = INLINE_PATTERN.exec(slice)) {
+  for (let match = INLINE_PATTERN.exec(text); match; match = INLINE_PATTERN.exec(text)) {
     const [bold, italicStar, italicUnderscore] = [match[1], match[2], match[3]];
     const content = bold ?? italicStar ?? italicUnderscore;
     const delimiter = bold !== undefined ? 2 : 1;
     const mark = bold !== undefined ? boldMark : italicMark;
 
-    const openFrom = scanFrom + match.index;
+    const openFrom = offset + match.index;
     const contentFrom = openFrom + delimiter;
     const contentTo = contentFrom + content.length;
     const closeTo = contentTo + delimiter;
@@ -100,22 +121,38 @@ const buildDecorations = (view: EditorView): DecorationSet => {
   const ranges: Range<Decoration>[] = [];
   const { doc } = view.state;
 
+  // Inline emphasis may span line breaks, so each visible range is padded by
+  // the longest possible match (a span whose other delimiter sits just outside
+  // the viewport is still found whole) and snapped to whole lines (the scan
+  // never starts halfway through a `**` delimiter). Padded blocks from
+  // adjacent visible ranges can overlap; they are merged so nothing is
+  // scanned — and decorated — twice.
+  const blocks: { from: number; to: number }[] = [];
+
   for (const { from, to } of view.visibleRanges) {
+    const blockFrom = doc.lineAt(Math.max(0, from - MAX_MATCH_LENGTH)).from;
+    const blockTo = doc.lineAt(Math.min(doc.length, to + MAX_MATCH_LENGTH)).to;
+    const previous = blocks[blocks.length - 1];
+    if (previous && blockFrom <= previous.to) {
+      previous.to = Math.max(previous.to, blockTo);
+    } else {
+      blocks.push({ from: blockFrom, to: blockTo });
+    }
+
     const firstLine = doc.lineAt(from).number;
     const lastLine = doc.lineAt(to).number;
     for (let lineNumber = firstLine; lineNumber <= lastLine; lineNumber++) {
       const line = doc.line(lineNumber);
-      let inlineStart = 0;
-
       const heading = HEADING_PATTERN.exec(line.text);
       if (heading) {
         ranges.push(headingLine(heading[1].length).range(line.from));
         ranges.push(hiddenMarker.range(line.from, line.from + heading[0].length));
-        inlineStart = heading[0].length;
       }
-
-      collectInline(line.text, inlineStart, line.from, ranges);
     }
+  }
+
+  for (const block of blocks) {
+    collectInline(doc.sliceString(block.from, block.to), block.from, ranges);
   }
 
   return Decoration.set(ranges, true);
@@ -161,46 +198,122 @@ const headingPrefix = (lineText: string): { level: number; length: number } => {
   return match ? { level: match[1].length, length: match[0].length } : { level: 0, length: 0 };
 };
 
+type LineSegment = { from: number; to: number };
+
 /**
- * Wraps each selection in `marker`, or unwraps it when the marker already
- * surrounds it (a toggle). With an empty selection this inserts an empty marker
- * pair and drops the cursor between the delimiters, ready to type. The single
- * `*` italic marker deliberately ignores a `**` bold delimiter so toggling
- * italic never peels a layer off bold text.
+ * The per-line pieces of [from, to], each trimmed to its non-whitespace
+ * extent; blank lines contribute nothing. These are the units the inline
+ * toggles wrap, so a multi-line selection gets one marker pair per line and
+ * the stored markup stays line-local.
+ */
+const lineSegments = (state: EditorState, from: number, to: number): LineSegment[] => {
+  const segments: LineSegment[] = [];
+  const firstLine = state.doc.lineAt(from).number;
+  const lastLine = state.doc.lineAt(to).number;
+  for (let lineNumber = firstLine; lineNumber <= lastLine; lineNumber++) {
+    const line = state.doc.line(lineNumber);
+    const sliceFrom = Math.max(from, line.from);
+    const sliceTo = Math.min(to, line.to);
+    const text = state.sliceDoc(sliceFrom, sliceTo);
+    const segFrom = sliceFrom + (text.length - text.trimStart().length);
+    const segTo = sliceTo - (text.length - text.trimEnd().length);
+    if (segFrom < segTo) {
+      segments.push({ from: segFrom, to: segTo });
+    }
+  }
+  return segments;
+};
+
+/**
+ * How a segment is already wrapped in `marker`: with the delimiters just
+ * inside the segment (`**abc**` fully selected), just outside it (`abc`
+ * selected within `**abc**`), or not at all.
+ */
+const existingWrap = (
+  state: EditorState,
+  segment: LineSegment,
+  marker: string
+): "inside" | "outside" | null => {
+  const width = marker.length;
+  const { from, to } = segment;
+  const docLength = state.doc.length;
+  // A single `*` that is really half of a `**` bold delimiter must not count
+  // as an italic marker, or toggling italic would peel a layer off bold text.
+  const isBoldHalf = (starFrom: number) =>
+    width === 1
+    && (state.sliceDoc(Math.max(0, starFrom - 1), starFrom + 1) === "**"
+      || state.sliceDoc(starFrom, Math.min(docLength, starFrom + 2)) === "**");
+
+  if (
+    to - from > 2 * width
+    && state.sliceDoc(from, from + width) === marker
+    && state.sliceDoc(to - width, to) === marker
+    && !isBoldHalf(from)
+    && !isBoldHalf(to - width)
+  ) {
+    return "inside";
+  }
+  if (
+    from - width >= 0
+    && to + width <= docLength
+    && state.sliceDoc(from - width, from) === marker
+    && state.sliceDoc(to, to + width) === marker
+    && !isBoldHalf(from - width)
+    && !isBoldHalf(to)
+  ) {
+    return "outside";
+  }
+  return null;
+};
+
+/**
+ * Toggles `marker` around the selection, line by line: every non-blank line
+ * gets its own marker pair, trimmed to its non-whitespace extent. When every
+ * line is already wrapped the command unwraps them all; on a mixed selection
+ * it wraps just the unwrapped lines, so repeating the shortcut round-trips.
+ * With an empty selection it inserts an empty marker pair and drops the
+ * cursor between the delimiters, ready to type.
  */
 const toggleInlineWrap = (view: EditorView, marker: string): boolean => {
   const { state } = view;
   const width = marker.length;
-  const docLength = state.doc.length;
 
   const spec = state.changeByRange((range) => {
-    const { from, to } = range;
-    const before = state.sliceDoc(Math.max(0, from - width), from);
-    const after = state.sliceDoc(to, Math.min(docLength, to + width));
-    const adjoinsBold =
-      width === 1
-      && (state.sliceDoc(Math.max(0, from - 2), from) === "**"
-        || state.sliceDoc(to, Math.min(docLength, to + 2)) === "**");
-
-    if (before === marker && after === marker && !adjoinsBold) {
+    if (range.empty) {
       return {
-        changes: [
-          { from: from - width, to: from },
-          { from: to, to: to + width }
-        ],
-        range: EditorSelection.range(from - width, to - width)
+        changes: { from: range.from, insert: marker + marker },
+        range: EditorSelection.cursor(range.from + width)
       };
     }
 
+    const segments = lineSegments(state, range.from, range.to);
+    const wraps = segments.map((segment) => existingWrap(state, segment, marker));
+    const changes: ChangeSpec[] = [];
+
+    if (segments.length > 0 && wraps.every((wrap) => wrap !== null)) {
+      segments.forEach(({ from, to }, index) => {
+        if (wraps[index] === "inside") {
+          changes.push({ from, to: from + width }, { from: to - width, to });
+        } else {
+          changes.push({ from: from - width, to: from }, { from: to, to: to + width });
+        }
+      });
+    } else {
+      segments.forEach(({ from, to }, index) => {
+        if (wraps[index] === null) {
+          changes.push({ from, insert: marker }, { from: to, insert: marker });
+        }
+      });
+    }
+
+    if (changes.length === 0) {
+      return { range };
+    }
+
+    const changeSet = state.changes(changes);
     return {
-      changes: [
-        { from, insert: marker },
-        { from: to, insert: marker }
-      ],
-      range:
-        from === to
-          ? EditorSelection.cursor(from + width)
-          : EditorSelection.range(from + width, to + width)
+      changes: changeSet,
+      range: EditorSelection.range(changeSet.mapPos(range.from, 1), changeSet.mapPos(range.to, -1))
     };
   });
 
