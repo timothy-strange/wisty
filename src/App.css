@@ -662,6 +662,11 @@ body {
   background: var(--menu-bar-bg);
 }
 
+.status-bar-character {
+  /* Roughly a tab stop's worth of separation from the line indicator. */
+  margin-left: 2em;
+}
+
 .status-bar-mode {
   margin-left: auto;
 }

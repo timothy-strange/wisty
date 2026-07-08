@@ -22,6 +22,8 @@ type DocChangedPayload = {
 type CursorPositionPayload = {
   currentLine: number;
   totalLines: number;
+  currentCharacter: number;
+  totalCharacters: number;
 };
 
 type EditorAdapterOptions = {
@@ -51,8 +53,7 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
   let revision = 0;
   let suppressDocEvents = 0;
   let largeLineSafeModeEnabled = false;
-  let lastReportedCurrentLine: number | undefined;
-  let lastReportedTotalLines: number | undefined;
+  let lastReportedPosition: CursorPositionPayload | undefined;
   const searchPanelAdapter = createSearchPanelAdapter();
 
   const spellService = createSpellService();
@@ -269,16 +270,29 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
   };
 
   const emitCursorPositionIfChanged = (state: EditorState) => {
-    const currentLine = state.doc.lineAt(state.selection.main.head).number;
-    const totalLines = state.doc.lines;
+    const head = state.selection.main.head;
+    const line = state.doc.lineAt(head);
+    // Characters count cursor positions (1 .. length + 1), so "character X of Y"
+    // keeps X <= Y even with the cursor past the last character of the line.
+    const position: CursorPositionPayload = {
+      currentLine: line.number,
+      totalLines: state.doc.lines,
+      currentCharacter: head - line.from + 1,
+      totalCharacters: line.length + 1
+    };
 
-    if (lastReportedCurrentLine === currentLine && lastReportedTotalLines === totalLines) {
+    if (
+      lastReportedPosition
+      && lastReportedPosition.currentLine === position.currentLine
+      && lastReportedPosition.totalLines === position.totalLines
+      && lastReportedPosition.currentCharacter === position.currentCharacter
+      && lastReportedPosition.totalCharacters === position.totalCharacters
+    ) {
       return;
     }
 
-    lastReportedCurrentLine = currentLine;
-    lastReportedTotalLines = totalLines;
-    options.onCursorPositionChanged({ currentLine, totalLines });
+    lastReportedPosition = position;
+    options.onCursorPositionChanged(position);
   };
 
   const dispatchTextChange = (

@@ -77,6 +77,8 @@ function App() {
   const [largeFileDialog, setLargeFileDialog] = createSignal<LargeFileDialogState | null>(null);
   const [cursorLine, setCursorLine] = createSignal(1);
   const [totalLines, setTotalLines] = createSignal(1);
+  const [cursorCharacter, setCursorCharacter] = createSignal(1);
+  const [totalCharacters, setTotalCharacters] = createSignal(1);
   const [spellDictionaries, setSpellDictionaries] = createSignal<DictionaryInfo[]>([]);
   const errorModalQueue = useErrorModalQueue();
 
@@ -87,9 +89,11 @@ function App() {
     onDocChanged: ({ revision }) => {
       documentStore.setRevision(revision);
     },
-    onCursorPositionChanged: ({ currentLine, totalLines }) => {
+    onCursorPositionChanged: ({ currentLine, totalLines, currentCharacter, totalCharacters }) => {
       setCursorLine(currentLine);
       setTotalLines(totalLines);
+      setCursorCharacter(currentCharacter);
+      setTotalCharacters(totalCharacters);
     },
     onFormatModeChanged: (mode) => {
       void settingsStore.actions.setFormatViewMode(mode);
@@ -509,6 +513,8 @@ function App() {
             enabled: settingsStore.state.statusBarEnabled,
             currentLine: cursorLine(),
             totalLines: totalLines(),
+            currentCharacter: cursorCharacter(),
+            totalCharacters: totalCharacters(),
             formatViewMode: settingsStore.state.formatViewMode
           }}
           errorModal={{
