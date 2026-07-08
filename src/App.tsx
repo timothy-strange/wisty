@@ -18,7 +18,7 @@ import { useMenuState } from "./core/app/useMenuState";
 import { useWindowTitleSync } from "./core/app/useWindowTitleSync";
 import { useErrorModalQueue } from "./core/app/useErrorModalQueue";
 import { createDocumentStore } from "./core/document/documentStore";
-import { createEditorAdapter } from "./core/editor/editorAdapter";
+import { createEditorAdapter, type CursorPositionPayload } from "./core/editor/editorAdapter";
 import {
   fileExists,
   getDirectoryFromFilePath,
@@ -75,10 +75,12 @@ function App() {
   const [addedWords, setAddedWords] = createSignal<string[]>([]);
   const [appVersion, setAppVersion] = createSignal("2.0.1");
   const [largeFileDialog, setLargeFileDialog] = createSignal<LargeFileDialogState | null>(null);
-  const [cursorLine, setCursorLine] = createSignal(1);
-  const [totalLines, setTotalLines] = createSignal(1);
-  const [cursorCharacter, setCursorCharacter] = createSignal(1);
-  const [totalCharacters, setTotalCharacters] = createSignal(1);
+  const [cursorPosition, setCursorPosition] = createSignal<CursorPositionPayload>({
+    currentLine: 1,
+    totalLines: 1,
+    currentCharacter: 1,
+    totalCharacters: 1
+  });
   const [spellDictionaries, setSpellDictionaries] = createSignal<DictionaryInfo[]>([]);
   const errorModalQueue = useErrorModalQueue();
 
@@ -89,12 +91,7 @@ function App() {
     onDocChanged: ({ revision }) => {
       documentStore.setRevision(revision);
     },
-    onCursorPositionChanged: ({ currentLine, totalLines, currentCharacter, totalCharacters }) => {
-      setCursorLine(currentLine);
-      setTotalLines(totalLines);
-      setCursorCharacter(currentCharacter);
-      setTotalCharacters(totalCharacters);
-    },
+    onCursorPositionChanged: setCursorPosition,
     onFormatModeChanged: (mode) => {
       void settingsStore.actions.setFormatViewMode(mode);
     }
@@ -511,10 +508,7 @@ function App() {
           }}
           statusBar={{
             enabled: settingsStore.state.statusBarEnabled,
-            currentLine: cursorLine(),
-            totalLines: totalLines(),
-            currentCharacter: cursorCharacter(),
-            totalCharacters: totalCharacters(),
+            ...cursorPosition(),
             formatViewMode: settingsStore.state.formatViewMode
           }}
           errorModal={{

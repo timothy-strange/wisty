@@ -50,14 +50,18 @@ describe("formatting decorations", () => {
     view.destroy();
   });
 
-  it("styles bold and italic across blank lines", () => {
-    const { view } = createView("**one\n\ntwo** and *three\n\nfour*");
-    const textOf = (selector: string) =>
-      Array.from(view.dom.querySelectorAll(selector))
-        .map((el) => el.textContent)
-        .join("");
-    expect(textOf(".cm-fmt-bold")).toBe("onetwo");
-    expect(textOf(".cm-fmt-italic")).toBe("threefour");
+  it("styles bold across blank lines", () => {
+    const { view } = createView("**one\n\ntwo**");
+    const boldText = Array.from(view.dom.querySelectorAll(".cm-fmt-bold"))
+      .map((el) => el.textContent)
+      .join("");
+    expect(boldText).toBe("onetwo");
+    view.destroy();
+  });
+
+  it("keeps italic within a single line", () => {
+    const { view } = createView("*one\ntwo* and _three\nfour_");
+    expect(view.dom.querySelector(".cm-fmt-italic")).toBeNull();
     view.destroy();
   });
 
@@ -150,6 +154,14 @@ describe("toggleBold", () => {
     expect(view.state.selection.main.head).toBe(2);
   });
 
+  it("removes the empty marker pair when toggled again at the cursor", () => {
+    const { view } = createView("");
+    toggleBold(view);
+    toggleBold(view);
+    expect(view.state.doc.toString()).toBe("");
+    expect(view.state.selection.main.head).toBe(0);
+  });
+
   it("wraps each selected line in its own marker pair, skipping blank lines", () => {
     const { view } = createView("one\ntwo\n\nthree");
     view.dispatch({ selection: EditorSelection.range(0, 14) });
@@ -192,6 +204,14 @@ describe("toggleItalic", () => {
     view.dispatch({ selection: EditorSelection.range(1, 6) });
     toggleItalic(view);
     expect(view.state.doc.toString()).toBe("hello world");
+  });
+
+  it("removes the empty italic pair when toggled again at the cursor", () => {
+    const { view } = createView("");
+    toggleItalic(view);
+    toggleItalic(view);
+    expect(view.state.doc.toString()).toBe("");
+    expect(view.state.selection.main.head).toBe(0);
   });
 
   it("never peels a layer off bold text (ignores adjoining ** delimiters)", () => {

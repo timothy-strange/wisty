@@ -35,15 +35,23 @@ const HEADING_PATTERN = /^(#{1,6})[ \t]+/;
  */
 const EMPHASIS_MAX_LENGTH = 1000;
 
-/** Longest possible whole match: content plus a pair of 2-character `**` delimiters. */
-const MAX_MATCH_LENGTH = EMPHASIS_MAX_LENGTH + 4;
+/**
+ * Longest possible whole match in UTF-16 code units. The `u`-flag quantifier
+ * caps content at EMPHASIS_MAX_LENGTH code *points*, each of which can occupy
+ * two code units (emoji and other astral characters), plus a pair of
+ * 2-character `**` delimiters — and CodeMirror positions are code units.
+ */
+const MAX_MATCH_LENGTH = 2 * EMPHASIS_MAX_LENGTH + 4;
 
 /**
  * Inline emphasis, delimiters kept out of the captured content. Bold is tried
- * before italic so `**x**` is not read as two stray `*`. Content may cross
- * line breaks — even blank lines — up to EMPHASIS_MAX_LENGTH characters, but
+ * before italic so `**x**` is not read as two stray `*`. Bold content may
+ * cross line breaks — even blank lines — up to EMPHASIS_MAX_LENGTH
+ * characters; italic is confined to a single line, because stray single `*`
+ * and `_` characters are common in ordinary text (wildcards, snake_case) and
+ * letting them pair across lines would mis-style everything between. Content
  * may not start or end with whitespace (CommonMark's flanking rule), which
- * keeps `* bullet` / `* lists` from reading as italic. Content is one-or-more
+ * keeps `* bullet` / `* lists` from reading as italic, and is one-or-more
  * non-delimiter characters, so empty runs like `****` never match — which is
  * what keeps deleting the last letter of a word from leaving orphaned markers.
  * Underscore italic additionally requires word boundaries so `snake_case` is
@@ -52,8 +60,8 @@ const MAX_MATCH_LENGTH = EMPHASIS_MAX_LENGTH + 4;
 const INLINE_PATTERN = new RegExp(
   [
     String.raw`\*\*(?!\s)([^*]{1,${EMPHASIS_MAX_LENGTH}}?)(?<!\s)\*\*`,
-    String.raw`\*(?!\s)([^*]{1,${EMPHASIS_MAX_LENGTH}}?)(?<!\s)\*`,
-    String.raw`(?<![\p{L}\p{N}_])_(?!\s)([^_]{1,${EMPHASIS_MAX_LENGTH}}?)(?<!\s)_(?![\p{L}\p{N}_])`
+    String.raw`\*(?!\s)([^*\n]{1,${EMPHASIS_MAX_LENGTH}}?)(?<!\s)\*`,
+    String.raw`(?<![\p{L}\p{N}_])_(?!\s)([^_\n]{1,${EMPHASIS_MAX_LENGTH}}?)(?<!\s)_(?![\p{L}\p{N}_])`
   ].join("|"),
   "gu"
 );
@@ -227,7 +235,8 @@ const lineSegments = (state: EditorState, from: number, to: number): LineSegment
 /**
  * How a segment is already wrapped in `marker`: with the delimiters just
  * inside the segment (`**abc**` fully selected), just outside it (`abc`
- * selected within `**abc**`), or not at all.
+ * selected within `**abc**`), or not at all. An empty segment (a bare cursor)
+ * can only be wrapped "outside" — sitting between an empty marker pair.
  */
 const existingWrap = (
   state: EditorState,
@@ -237,30 +246,34 @@ const existingWrap = (
   const width = marker.length;
   const { from, to } = segment;
   const docLength = state.doc.length;
-  // A single `*` that is really half of a `**` bold delimiter must not count
-  // as an italic marker, or toggling italic would peel a layer off bold text.
-  const isBoldHalf = (starFrom: number) =>
-    width === 1
-    && (state.sliceDoc(Math.max(0, starFrom - 1), starFrom + 1) === "**"
-      || state.sliceDoc(starFrom, Math.min(docLength, starFrom + 2)) === "**");
 
-  if (
-    to - from > 2 * width
-    && state.sliceDoc(from, from + width) === marker
-    && state.sliceDoc(to - width, to) === marker
-    && !isBoldHalf(from)
-    && !isBoldHalf(to - width)
-  ) {
+  const markerAt = (pos: number) =>
+    pos >= 0 && pos + width <= docLength && state.sliceDoc(pos, pos + width) === marker;
+
+  // A candidate single-`*` pair is rejected when either star is really half of
+  // a `**` bold delimiter — a neighbouring `*` that is not the pair's own
+  // other marker — so toggling italic never peels a layer off bold text.
+  const peelsBold = (openFrom: number, closeFrom: number): boolean => {
+    if (width !== 1) {
+      return false;
+    }
+    const starAt = (pos: number) =>
+      pos >= 0 && pos < docLength && state.sliceDoc(pos, pos + 1) === "*";
+    return (
+      starAt(openFrom - 1)
+      || (starAt(openFrom + 1) && openFrom + 1 !== closeFrom)
+      || starAt(closeFrom + 1)
+      || (starAt(closeFrom - 1) && closeFrom - 1 !== openFrom)
+    );
+  };
+
+  const wrappedBy = (openFrom: number, closeFrom: number): boolean =>
+    markerAt(openFrom) && markerAt(closeFrom) && !peelsBold(openFrom, closeFrom);
+
+  if (to - from > 2 * width && wrappedBy(from, to - width)) {
     return "inside";
   }
-  if (
-    from - width >= 0
-    && to + width <= docLength
-    && state.sliceDoc(from - width, from) === marker
-    && state.sliceDoc(to, to + width) === marker
-    && !isBoldHalf(from - width)
-    && !isBoldHalf(to)
-  ) {
+  if (wrappedBy(from - width, to)) {
     return "outside";
   }
   return null;
@@ -272,7 +285,9 @@ const existingWrap = (
  * line is already wrapped the command unwraps them all; on a mixed selection
  * it wraps just the unwrapped lines, so repeating the shortcut round-trips.
  * With an empty selection it inserts an empty marker pair and drops the
- * cursor between the delimiters, ready to type.
+ * cursor between the delimiters, ready to type — and if the cursor already
+ * sits between such a pair, it removes it instead, so that gesture
+ * round-trips too.
  */
 const toggleInlineWrap = (view: EditorView, marker: string): boolean => {
   const { state } = view;
@@ -280,6 +295,15 @@ const toggleInlineWrap = (view: EditorView, marker: string): boolean => {
 
   const spec = state.changeByRange((range) => {
     if (range.empty) {
+      if (existingWrap(state, range, marker) === "outside") {
+        return {
+          changes: [
+            { from: range.from - width, to: range.from },
+            { from: range.to, to: range.to + width }
+          ],
+          range: EditorSelection.cursor(range.from - width)
+        };
+      }
       return {
         changes: { from: range.from, insert: marker + marker },
         range: EditorSelection.cursor(range.from + width)

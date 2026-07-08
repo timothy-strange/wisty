@@ -8,6 +8,7 @@ import { FileSavingModal } from "./FileSavingModal";
 import { LargeFileOpenModal } from "./LargeFileOpenModal";
 import { MenuBar } from "./MenuBar";
 import type { ErrorModalEntry } from "../core/app/useErrorModalQueue";
+import type { CursorPositionPayload } from "../core/editor/editorAdapter";
 
 type AppShellProps = {
   setEditorHostRef: (node: HTMLDivElement) => void;
@@ -57,12 +58,8 @@ type AppShellProps = {
   };
   statusBar: {
     enabled: boolean;
-    currentLine: number;
-    totalLines: number;
-    currentCharacter: number;
-    totalCharacters: number;
     formatViewMode: "formatted" | "plain";
-  };
+  } & CursorPositionPayload;
   errorModal: {
     open: boolean;
     entry: ErrorModalEntry | null;

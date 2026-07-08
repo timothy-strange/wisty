@@ -19,12 +19,15 @@ type DocChangedPayload = {
   revision: number;
 };
 
-type CursorPositionPayload = {
+export type CursorPositionPayload = {
   currentLine: number;
   totalLines: number;
   currentCharacter: number;
   totalCharacters: number;
 };
+
+const positionsEqual = (a: CursorPositionPayload, b: CursorPositionPayload): boolean =>
+  (Object.keys(a) as (keyof CursorPositionPayload)[]).every((key) => a[key] === b[key]);
 
 type EditorAdapterOptions = {
   onDocChanged: (payload: DocChangedPayload) => void;
@@ -281,13 +284,7 @@ export const createEditorAdapter = (options: EditorAdapterOptions) => {
       totalCharacters: line.length + 1
     };
 
-    if (
-      lastReportedPosition
-      && lastReportedPosition.currentLine === position.currentLine
-      && lastReportedPosition.totalLines === position.totalLines
-      && lastReportedPosition.currentCharacter === position.currentCharacter
-      && lastReportedPosition.totalCharacters === position.totalCharacters
-    ) {
+    if (lastReportedPosition && positionsEqual(lastReportedPosition, position)) {
       return;
     }
 
